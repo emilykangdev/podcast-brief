@@ -13,10 +13,10 @@ const links = [
     href: "/#pricing",
     label: "Pricing",
   },
-  {
-    href: "/#testimonials",
-    label: "Reviews",
-  },
+  // {
+  //   href: "/#testimonials",
+  //   label: "Reviews",
+  // },
   {
     href: "/#faq",
     label: "FAQ",
@@ -49,7 +49,7 @@ const Header = () => {
             href="/"
             title={`${config.appName} hompage`}
           >
-            <Image
+            {/* <Image
               src={logo}
               alt={`${config.appName} logo`}
               className="w-8"
@@ -57,7 +57,7 @@ const Header = () => {
               priority={true}
               width={32}
               height={32}
-            />
+            /> */}
             <span className="font-extrabold text-lg">{config.appName}</span>
           </Link>
         </div>
@@ -111,7 +111,7 @@ const Header = () => {
         >
           {/* Your logo/name on small screens */}
           <div className="flex items-center justify-between">
-            <Link
+            {/* <Link
               className="flex items-center gap-2 shrink-0 "
               title={`${config.appName} hompage`}
               href="/"
@@ -126,7 +126,7 @@ const Header = () => {
                 height={32}
               />
               <span className="font-extrabold text-lg">{config.appName}</span>
-            </Link>
+            </Link> */}
             <button
               type="button"
               className="-m-2.5 rounded-md p-2.5"

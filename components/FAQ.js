@@ -8,14 +8,13 @@ import { useRef, useState } from "react";
 const faqList = [
   {
     question: "What do I get exactly?",
-    answer: <div className="space-y-2 leading-relaxed">Loreum Ipseum</div>,
+    answer: <div className="space-y-2 leading-relaxed">You get a certain number of credits. 1 credit = 1 brief. You can fill up on credits at any time.</div>,
   },
   {
     question: "Can I get a refund?",
     answer: (
       <p>
-        Yes! You can request a refund within 7 days of your purchase. Reach out
-        by email.
+        There are no refunds at this time, because payment is for a bundle of episodes rather than a monthly subscription. If a Brief is not to your satisfaction, please forward a copy of it and we may regenerate a free Brief of the episode for you.
       </p>
     ),
   },

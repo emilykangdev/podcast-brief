@@ -57,39 +57,86 @@ const TOS = () => {
           className="leading-relaxed whitespace-pre-wrap"
           style={{ fontFamily: "sans-serif" }}
         >
-          {`Last Updated: September 26, 2023
+          {`Last Updated: March 6, 2026
 
-Welcome to ShipFast!
+Welcome to PodcastBrief. These Terms of Service (“Terms”) govern your use of the PodcastBrief website and services available at:
 
-These Terms of Service ("Terms") govern your use of the ShipFast website at https://shipfa.st ("Website") and the services provided by ShipFast. By using our Website and services, you agree to these Terms.
+https://content-learner.vercel.app/
 
-1. Description of ShipFast
+By accessing or using the service, you agree to be bound by these Terms. If you do not agree with these Terms, please do not use the service.
 
-ShipFast is a platform that offers a JavaScript code boilerplate to assist entrepreneurs in launching their startups more efficiently.
+1. Description of the Service
 
-2. Ownership and Usage Rights
+PodcastBrief provides a service that generates detailed briefs summarizing and explaining podcast episodes. Users may purchase a certain number of briefs and submit podcast content to receive generated briefs delivered to their email inbox.
 
-When you purchase a package from ShipFast, you gain the right to download and use the code provided for creating applications. You own the code you create but do not have the right to resell it. We offer a full refund within 7 days of purchase, as specified in our refund policy.
+2. Purchases and Usage
 
-3. User Data and Privacy
+Users may purchase credits for a specified number of briefs. After purchase, users may submit requests for briefs through the service.
 
-We collect and store user data, including name, email, and payment information, as necessary to provide our services. For details on how we handle your data, please refer to our Privacy Policy at https://shipfa.st/privacy-policy.
+Each purchased credit allows the user to request one brief. Once generated and delivered to the user’s email inbox, the user owns the delivered brief.
 
-4. Non-Personal Data Collection
+PodcastBrief reserves the right to refuse or cancel orders if necessary to maintain service integrity or comply with applicable law.
 
-We use web cookies to collect non-personal data for the purpose of improving our services and user experience.
+3. Ownership of Generated Briefs
 
-5. Governing Law
+Once a brief is generated and sent to the user’s email address, the user owns the copy of the brief delivered to them.
 
-These Terms are governed by the laws of France.
+PodcastBrief retains ownership of the underlying service, website, software, and systems used to generate the briefs.
 
-6. Updates to the Terms
+4. User Responsibilities
 
-We may update these Terms from time to time. Users will be notified of any changes via email.
+By using the service, you agree to:
 
-For any questions or concerns regarding these Terms of Service, please contact us at marc@shipfa.st.
+Provide accurate and truthful information when placing orders
 
-Thank you for using ShipFast!`}
+Use the service only for lawful purposes
+
+Not misuse, interfere with, or attempt to disrupt the website or service
+
+5. Information We Collect
+
+To provide the service, we collect certain information including:
+
+Name
+
+Email address
+
+Payment information
+
+We may also collect non-personal information such as web cookies to improve website functionality.
+
+For more details about how data is handled, please review our Privacy Policy:
+
+https://content-learner.vercel.app/privacy-policy
+
+6. Payment Processing
+
+Payments may be processed through third-party payment providers. By completing a purchase, you agree to the payment terms and policies of the applicable payment processor.
+
+7. Service Availability
+
+PodcastBrief strives to keep the service available but does not guarantee uninterrupted or error-free operation. The service may be modified, suspended, or discontinued at any time.
+
+8. Limitation of Liability
+
+To the maximum extent permitted by law, PodcastBrief shall not be liable for any indirect, incidental, consequential, or special damages arising from the use or inability to use the service.
+
+The service and generated briefs are provided “as is” without warranties of any kind.
+
+9. Governing Law
+
+These Terms are governed by and interpreted in accordance with the laws of the United States.
+
+10. Updates to These Terms
+
+We may update these Terms from time to time. If material changes are made, users will be notified by email.
+
+11. Contact Information
+
+If you have any questions regarding these Terms, please contact:
+
+PodcastBrief
+Email: podcastbrief.support@gmail.com`}
         </pre>
       </div>
     </main>

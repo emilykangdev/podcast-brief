@@ -30,11 +30,11 @@ export async function POST(req) {
   let eventType;
   let event;
 
-  // Create a private supabase client using the secret service_role API key
+  // Create a private Supabase client using the server-only secret key
   // Disable realtime to reduce Edge Runtime warnings
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.SUPABASE_SECRET_KEY,
     {
       auth: { persistSession: false },
       realtime: { disabled: true }

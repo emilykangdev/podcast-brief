@@ -14,11 +14,10 @@ const CTA = () => {
       <div className="relative hero-content text-center text-neutral-content p-8">
         <div className="flex flex-col items-center max-w-xl p-8 md:p-0">
           <h2 className="font-bold text-3xl md:text-5xl tracking-tight mb-8 md:mb-12">
-            Boost your app, launch, earn
+            Learn from every podcast episode with a Learning Brief
           </h2>
           <p className="text-lg opacity-80 mb-12 md:mb-16">
-            Don&apos;t waste time integrating APIs or designing a pricing
-            section...
+            Don&apost waste time pausing for references to authors, content, figures. Get them in your inbox for every podcast you listen to.
           </p>
 
           <button className="btn btn-primary btn-wide">

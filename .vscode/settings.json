@@ -1,0 +1,11 @@
+{
+    "chat.mcp.serverSampling": {
+        "podcast-brief/.vscode/mcp.json: stripe": {
+            "allowedModels": [
+                "copilot/auto",
+                "claude-code/claude-sonnet-4.6",
+                "copilotcli/claude-sonnet-4.6"
+            ]
+        }
+    }
+}
