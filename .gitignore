@@ -41,3 +41,4 @@ public/sitemap-0.xml.env
 
 # transcripts (generated at runtime)
 /transcripts
+worktrees/

@@ -93,7 +93,13 @@ Use the service only for lawful purposes
 
 Not misuse, interfere with, or attempt to disrupt the website or service
 
-5. Information We Collect
+5. Third-Party Podcast Content
+
+PodcastBrief generates briefs by processing publicly available podcast audio. Briefs are transformative summaries intended for personal educational use only. You agree not to reproduce, distribute, or publicly republish any brief in a way that substitutes for or competes with the original podcast content.
+
+Raw transcripts of podcast episodes are used solely as an intermediate processing step to generate your brief and are not provided to users.
+
+6. Information We Collect
 
 To provide the service, we collect certain information including:
 
@@ -109,29 +115,29 @@ For more details about how data is handled, please review our Privacy Policy:
 
 https://content-learner.vercel.app/privacy-policy
 
-6. Payment Processing
+7. Payment Processing
 
 Payments may be processed through third-party payment providers. By completing a purchase, you agree to the payment terms and policies of the applicable payment processor.
 
-7. Service Availability
+8. Service Availability
 
 PodcastBrief strives to keep the service available but does not guarantee uninterrupted or error-free operation. The service may be modified, suspended, or discontinued at any time.
 
-8. Limitation of Liability
+9. Limitation of Liability
 
 To the maximum extent permitted by law, PodcastBrief shall not be liable for any indirect, incidental, consequential, or special damages arising from the use or inability to use the service.
 
 The service and generated briefs are provided “as is” without warranties of any kind.
 
-9. Governing Law
+10. Governing Law
 
 These Terms are governed by and interpreted in accordance with the laws of the United States.
 
-10. Updates to These Terms
+11. Updates to These Terms
 
 We may update these Terms from time to time. If material changes are made, users will be notified by email.
 
-11. Contact Information
+12. Contact Information
 
 If you have any questions regarding these Terms, please contact:
 
