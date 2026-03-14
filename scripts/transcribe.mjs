@@ -18,7 +18,7 @@ if (!appleUrl) {
 }
 
 if (!appleUrl.startsWith("https://podcasts.apple.com")) {
-  console.error("[422] Input must be an Apple Podcasts URL.");
+  console.error("[422] Invalid Apple Podcast show or episode link.");
   process.exit(1);
 }
 
@@ -95,7 +95,7 @@ async function resolveFromShowUrl(collectionId) {
 async function resolveEpisode(url) {
   const collectionId = url.match(/id(\d+)/)?.[1];
   if (!collectionId) {
-    console.error("[422] Could not extract iTunes ID from URL.");
+    console.error("[422] Invalid Apple Podcast show or episode link.");
     process.exit(1);
   }
 
