@@ -1,19 +1,36 @@
-import { NextResponse } from "next/server";
 import { createClient } from "@/libs/supabase/server";
-import config from "@/config";
+import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// This route is called after a successful login. It exchanges the code for a session and redirects to the callback URL (see config.js).
 export async function GET(req) {
   const requestUrl = new URL(req.url);
   const code = requestUrl.searchParams.get("code");
+  const supabase = await createClient();
 
   if (code) {
-    const supabase = await createClient();
+    // exchangeCodeForSession sets the auth cookie. If a session already exists, it overwrites it.
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // URL to redirect to after sign in process completes
-  return NextResponse.redirect(requestUrl.origin + config.auth.callbackUrl);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    // Use select+limit(1) instead of count — simpler, avoids full COUNT(*) scan.
+    // If query fails, data is null and we fall through to /dashboard (acceptable default).
+    const { data } = await supabase
+      .from("briefs")
+      .select("id")
+      .eq("profile_id", user.id)
+      .limit(1);
+
+    if (data?.length === 0) {
+      return NextResponse.redirect(new URL("/onboarding", requestUrl.origin));
+    }
+  }
+
+  // Fallback: no user (bad/missing code) → /dashboard, which bounces to /signin via layout guard
+  return NextResponse.redirect(new URL("/dashboard", requestUrl.origin));
 }

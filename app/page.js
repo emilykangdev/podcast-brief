@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import FeaturesAccordion from "@/components/FeaturesAccordion";
@@ -10,7 +11,9 @@ import Footer from "@/components/Footer";
 export default function Page() {
   return (
     <>
-      <Header />
+      <Suspense>
+        <Header />
+      </Suspense>
       <main>
         <Hero />
         <Problem />
