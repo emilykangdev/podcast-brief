@@ -34,11 +34,11 @@ const deepgram = new DeepgramClient({ apiKey: process.env.DEEPGRAM_API_KEY });
 
 // ── Episode resolution ────────────────────────────────────────────
 
-async function resolveFromEpisodeUrl(collectionId, trackId) {
+async function resolveFromEpisodeUrl(trackId) {
   console.log(`Looking up episode (trackId: ${trackId})...`);
-  const res = await fetch(`https://itunes.apple.com/lookup?id=${collectionId}&entity=podcastEpisode&limit=200`);
+  const res = await fetch(`https://itunes.apple.com/lookup?id=${trackId}`);
   const { results } = await res.json();
-  const episode = results?.find((r) => r.trackId === parseInt(trackId));
+  const episode = results?.[0];
 
   if (!episode) {
     console.error("[422] Episode not found in iTunes. The link may be stale or region-locked.");
@@ -75,7 +75,12 @@ async function resolveFromShowUrl(collectionId) {
     process.exit(1);
   }
 
-  const item = feed.items[0];
+  const item = feed.items?.[0];
+  if (!item) {
+    console.error("[422] RSS feed has no episodes.");
+    process.exit(1);
+  }
+
   return {
     audioUrl: item.enclosure?.url,
     title: item.title ?? "Untitled",
@@ -96,7 +101,7 @@ async function resolveEpisode(url) {
 
   const trackId = url.match(/[?&]i=(\d+)/)?.[1];
   return trackId
-    ? resolveFromEpisodeUrl(collectionId, trackId)
+    ? resolveFromEpisodeUrl(trackId)
     : resolveFromShowUrl(collectionId);
 }
 
