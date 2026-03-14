@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import TestimonialsAvatars from "./TestimonialsAvatars";
 import config from "@/config";
 
@@ -27,9 +28,9 @@ const Hero = () => {
         <p className="text-lg opacity-80 leading-relaxed">
           Every episode becomes a clear brief explaining the ideas, books, and thinkers mentioned.
         </p>
-        <button className="btn btn-primary btn-wide">
+        <Link href={config.auth.loginUrl} className="btn btn-primary btn-wide">
           Get {config.appName}
-        </button>
+        </Link>
 
         {/* <TestimonialsAvatars priority={true} /> */}
       </div>
