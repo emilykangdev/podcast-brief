@@ -18,6 +18,38 @@ Simplify the signin page to magic link only (remove Google OAuth), add smart red
 - After magic link click: new users (0 briefs) → `/onboarding`, returning users → `/dashboard`
 - `/onboarding` is auth-gated, shows Apple Podcasts URL input form (UI only, no submission logic)
 
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Hero
+    participant SignIn as Sign-In Page
+    participant AuthCallback as Auth Callback
+    participant Supabase as Supabase Auth
+    participant DB as Briefs DB
+    participant Onboarding as Onboarding Page
+    participant Dashboard as Dashboard
+
+    User->>Hero: Clicks Sign-In Link
+    Hero->>SignIn: Navigate to /signin
+    User->>SignIn: Enters Email
+    SignIn->>Supabase: sendSignInWithOtp(email)
+    Supabase->>User: Sends Magic Link
+    User->>AuthCallback: Clicks Magic Link
+    AuthCallback->>Supabase: Exchange code for session
+    AuthCallback->>Supabase: getUser()
+    Supabase->>AuthCallback: Returns authenticated user
+    AuthCallback->>DB: Query briefs (profile_id = user.id)
+    DB->>AuthCallback: Returns briefs data
+    alt New User (no briefs)
+        AuthCallback->>Onboarding: Redirect to /onboarding
+        Onboarding->>User: Display Podcasts URL form
+    else Returning User (has briefs)
+        AuthCallback->>Dashboard: Redirect to /dashboard
+    end
+
+```
+
 ## Security Model
 
 **Redirect**: The browser follows the magic link, which hits `/api/auth/callback` on the server. That route sets the session cookie and decides where to send the user. Entirely server-side — the frontend just receives the final redirect destination.
