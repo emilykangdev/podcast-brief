@@ -1,0 +1,1 @@
+[ ] Find an alternative to getting podcast audio than Apple Podcasts -- only after I get paying customers though
