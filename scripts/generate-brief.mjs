@@ -28,10 +28,9 @@ for (const key of ["OPENROUTER_API_KEY", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_S
 const args = process.argv.slice(2);
 const force = args.includes("--force");
 const positional = args.filter((a) => a !== "--force");
-const [transcriptId, transcriptPath, episodeTitle = "Unknown Episode", episodeDescription = "", profileId] = positional;
+const [transcriptId, transcriptPath, profileId] = positional;
 if (!transcriptId || !transcriptPath || !profileId) {
-  console.error('Usage: node --env-file=.env.local scripts/generate-brief.mjs <transcriptId> <transcript.md> "Episode Title" "Description" <profileId> [--force]');
-  console.error('       Use "" for Description if not available — do not skip it.');
+  console.error('Usage: node --env-file=.env.local scripts/generate-brief.mjs <transcriptId> <transcript.md> <profileId> [--force]');
   console.error('       --force: skip 409 check and delete existing row before regenerating (dev only)');
   process.exit(1);
 }
@@ -108,7 +107,7 @@ function chunkTranscript(text) {
 async function extractChunk(chunkText, index, total) {
   const label = total > 1 ? ` (chunk ${index + 1}/${total})` : "";
   console.error(`  Extracting${label}...`);
-  const userContent = `Episode title: ${episodeTitle}\nDescription: ${episodeDescription}\n\nTranscript${total > 1 ? ` segment ${index + 1} of ${total}` : ""}:\n${chunkText}`;
+  const userContent = `Transcript${total > 1 ? ` segment ${index + 1} of ${total}` : ""}:\n${chunkText}`;
   return callOpenRouter(SYSTEM, userContent);
 }
 

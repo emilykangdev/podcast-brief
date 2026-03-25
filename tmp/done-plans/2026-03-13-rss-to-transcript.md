@@ -507,3 +507,21 @@ node --env-file=.env.local scripts/transcribe.mjs "https://open.spotify.com/show
 - [ ] Mode B (show URL) transcribes the latest episode
 - [ ] Second run uses cache
 - [ ] Non-Apple URL exits with `[422]`
+
+# Real implementation notes
+
+Branch: make-brief
+
+- Manually that getting audio from Apple Podcasts works for different shows 
+
+Note on Apple Podcasts API: 
+
+Direct episode lookup by trackId has never worked in the iTunes API. It's not a      
+recent breakage; developer forum threads asking about it go back to 2017 with no resolution. The lookup?id=X endpoint only resolves 
+top-level catalog items (podcasts as collections, apps, albums) — episode trackIds are not indexed there. It's the same reason you  
+can't look up a song directly; you have to go through the album.                                                                    
+                                                                                                                                    
+So the current fix (collection + client-side filter by trackId) is the correct and only approach via the iTunes API. The 200-episode
+  cap is a real but unavoidable limitation.                                                                                          
+                                                                                                                                    
+This is true even in 2026. 
