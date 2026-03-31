@@ -34,9 +34,12 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@browserbasehq/sdk": "^2.9.0",
     "@tailwindcss/postcss": "^4.0.0",
     "autoprefixer": "^10.4.20",
     "daisyui": "^5.0.50",
+    "exa-js": "^2.8.0",
+    "playwright-core": "^1.58.2",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.0.0"
   },
