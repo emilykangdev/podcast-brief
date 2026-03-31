@@ -1,4 +1,7 @@
 const nextConfig = {
+  eslint: {
+    dirs: ["app", "components", "lib", "scripts"],
+  },
   reactStrictMode: true,
   images: {
     remotePatterns: [

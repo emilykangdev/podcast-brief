@@ -150,11 +150,10 @@ function formatTime(seconds) {
   return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
 }
 
-function saveMarkdown(title, date, content) {
-  const dir = path.join(process.cwd(), "transcripts");
+function saveMarkdown(episodeId, content) {
+  const dir = path.join(process.cwd(), "briefs");
   fs.mkdirSync(dir, { recursive: true });
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "episode";
-  const filepath = path.join(dir, `${slug}-${date}.md`);
+  const filepath = path.join(dir, `${episodeId}-transcript.md`);
   fs.writeFileSync(filepath, content, "utf8");
   console.log(`Written: ${filepath}`);
 }
@@ -184,7 +183,7 @@ if (cacheError && cacheError.code !== "PGRST116") { // PGRST116 = no rows found 
 
 if (cached) {
   console.log("Cache hit — using stored transcript.");
-  saveMarkdown(episode.title, episode.date, cached.transcript_md);
+  saveMarkdown(episode.episodeId, cached.transcript_md);
   process.exit(0);
 }
 
@@ -226,4 +225,4 @@ if (insertError) {
   console.error("Supabase insert error (file still written):", insertError.message);
 }
 
-saveMarkdown(episode.title, episode.date, md);
+saveMarkdown(episode.episodeId, md);
