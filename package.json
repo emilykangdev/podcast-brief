@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@browserbasehq/sdk": "^2.9.0",
     "@deepgram/sdk": "^5.0.0",
     "@headlessui/react": "^2.2.0",
     "@supabase/ssr": "^0.5.2",
@@ -17,12 +18,14 @@
     "axios": "^1.7.9",
     "crisp-sdk-web": "^1.0.25",
     "eslint": "^9.17.0",
+    "exa-js": "^2.8.0",
     "eslint-config-next": "^15.1.3",
     "form-data": "^4.0.1",
     "next": "^15.1.9",
     "next-sitemap": "^4.2.3",
     "nextjs-toploader": "^3.7.15",
     "nodemailer": "^6.9.16",
+    "playwright-core": "^1.58.2",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-hot-toast": "^2.4.1",
@@ -34,12 +37,9 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "@browserbasehq/sdk": "^2.9.0",
     "@tailwindcss/postcss": "^4.0.0",
     "autoprefixer": "^10.4.20",
     "daisyui": "^5.0.50",
-    "exa-js": "^2.8.0",
-    "playwright-core": "^1.58.2",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.0.0"
   },
