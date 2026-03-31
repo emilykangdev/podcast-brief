@@ -141,7 +141,7 @@ console.error(`→ ${found}/${resolved.length} with candidates`);
 
 // Strip "-output" suffix so "abc123-output.md" → "abc123-references.json" not "abc123-output-references.json"
 const stem = path.basename(inputPath, path.extname(inputPath));
-const podcastID = stem.replace(/-output$/, "");
+const podcastID = stem.replace(/-output.*$/, "");
 const brifsDir = path.join(process.cwd(), "briefs");
 mkdirSync(brifsDir, { recursive: true });
 const outPath = path.join(brifsDir, `${podcastID}-references.json`);

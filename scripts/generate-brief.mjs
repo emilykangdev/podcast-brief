@@ -23,8 +23,6 @@ for (const key of ["OPENROUTER_API_KEY", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_S
 }
 
 // ── arg checks ────────────────────────────────────────────────────────────────
-// NOTE: episodeDescription must always be passed (use "" as placeholder).
-//   profileId is the 5th positional arg — omitting description shifts it to 4th.
 const args = process.argv.slice(2);
 const force = args.includes("--force");
 const positional = args.filter((a) => a !== "--force");
@@ -188,9 +186,10 @@ try {
   let version = 1;
   while (existsSync(`briefs/${transcriptId}-output-v${version}.md`)) version++;
   const outputFile = `briefs/${transcriptId}-output-v${version}.md`;
-  writeFileSync(outputFile, brief, "utf-8");
+  const disclaimer = `> Disclaimer: Speaker accreditation may not be 100% correct. Please confirm references — they are a starting point.\n\n`;
+  writeFileSync(outputFile, disclaimer + brief, "utf-8");
   console.error(`✓ Brief written to ${outputFile}`);
-  process.stdout.write(brief);
+  process.stdout.write(disclaimer + brief);
 
   // update brief row to complete
   console.error("  Saving to Supabase...");

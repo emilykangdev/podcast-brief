@@ -9,8 +9,19 @@ if (!briefPath || !referencesPath) {
   process.exit(1);
 }
 
-const brief = readFileSync(briefPath, "utf-8");
-const enrichedRefs = readFileSync(referencesPath, "utf-8");
+let brief, enrichedRefs;
+try {
+  brief = readFileSync(briefPath, "utf-8");
+} catch (e) {
+  console.error(`Error: cannot read brief file: ${e.message}`);
+  process.exit(1);
+}
+try {
+  enrichedRefs = readFileSync(referencesPath, "utf-8");
+} catch (e) {
+  console.error(`Error: cannot read references file: ${e.message}`);
+  process.exit(1);
+}
 
 // Find and replace the # REFERENCES section
 const lines = brief.split("\n");
@@ -38,7 +49,7 @@ writeFinal(briefPath, finalBrief);
 
 function writeFinal(inputPath, content) {
   const stem = path.basename(inputPath, path.extname(inputPath));
-  const podcastID = stem.replace(/-output$/, "");
+  const podcastID = stem.replace(/-output.*$/, "");
   const brifsDir = path.join(process.cwd(), "briefs");
   mkdirSync(brifsDir, { recursive: true });
   const outPath = path.join(brifsDir, `${podcastID}-final-brief.md`);
