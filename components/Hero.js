@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import TestimonialsAvatars from "./TestimonialsAvatars";
 import config from "@/config";
 
 const Hero = () => {
