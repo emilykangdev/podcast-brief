@@ -49,11 +49,7 @@ const ButtonLead = ({ extraStyle }) => {
         onChange={(e) => setEmail(e.target.value)}
       />
 
-      <button
-        className="btn btn-primary btn-block"
-        type="submit"
-        disabled={isDisabled}
-      >
+      <button className="btn btn-primary btn-block" type="submit" disabled={isDisabled}>
         Join waitlist
         {isLoading ? (
           <span className="loading loading-spinner loading-xs"></span>

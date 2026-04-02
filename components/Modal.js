@@ -8,11 +8,7 @@ import { Fragment } from "react";
 const Modal = ({ isModalOpen, setIsModalOpen }) => {
   return (
     <Transition appear show={isModalOpen} as={Fragment}>
-      <Dialog
-        as="div"
-        className="relative z-50"
-        onClose={() => setIsModalOpen(false)}
-      >
+      <Dialog as="div" className="relative z-50" onClose={() => setIsModalOpen(false)}>
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"

@@ -51,14 +51,8 @@ const Item = ({ feature, isOpen, setFeatureSelected }) => {
         }}
         aria-expanded={isOpen}
       >
-        <span className={`duration-100 ${isOpen ? "text-primary" : ""}`}>
-          {svg}
-        </span>
-        <span
-          className={`flex-1 text-base-content ${
-            isOpen ? "text-primary font-semibold" : ""
-          }`}
-        >
+        <span className={`duration-100 ${isOpen ? "text-primary" : ""}`}>{svg}</span>
+        <span className={`flex-1 text-base-content ${isOpen ? "text-primary font-semibold" : ""}`}>
           <h3 className="inline">{title}</h3>
         </span>
       </button>

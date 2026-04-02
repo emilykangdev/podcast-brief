@@ -33,8 +33,7 @@ export const categories = [
     titleShort: "Tutorials",
     description:
       "Learn how to use ShipFast with these step-by-step tutorials. I'll show you how to ship faster and save time.",
-    descriptionShort:
-      "Learn how to use ShipFast with these step-by-step tutorials.",
+    descriptionShort: "Learn how to use ShipFast with these step-by-step tutorials.",
   },
 ];
 
@@ -146,8 +145,7 @@ const styles = {
   li: "list-item",
   // Altnernatively, you can use the library react-syntax-highlighter to display code snippets.
   code: "text-sm font-mono bg-neutral text-neutral-content p-6 rounded-box my-4 overflow-x-scroll select-all",
-  codeInline:
-    "text-sm font-mono bg-base-300 px-1 py-0.5 rounded-box select-all",
+  codeInline: "text-sm font-mono bg-base-300 px-1 py-0.5 rounded-box select-all",
 };
 
 // All the blog articles data display in the /blog/[articleId].js pages.
@@ -161,9 +159,7 @@ export const articles = [
     description:
       "Supabase is an open-source Firebase alternative. It's a great tool for building a backend for your app. It's now integrated with ShipFast!",
     // An array of categories of the article. It's used to generate the category badges, the category filter, and more.
-    categories: [
-      categories.find((category) => category.slug === categorySlugs.feature),
-    ],
+    categories: [categories.find((category) => category.slug === categorySlugs.feature)],
     // The author of the article. It's used to generate a link to the author's bio page.
     author: authors.find((author) => author.slug === authorSlugs.marc),
     // The date of the article. It's used to generate the meta date.
@@ -190,9 +186,8 @@ export const articles = [
         <section>
           <h2 className={styles.h2}>Introduction</h2>
           <p className={styles.p}>
-            Supabase is an open-source Firebase alternative. It&apos;s a great
-            tool for building a backend for your app. It&apos;s now integrated
-            with ShipFast!
+            Supabase is an open-source Firebase alternative. It&apos;s a great tool for building a
+            backend for your app. It&apos;s now integrated with ShipFast!
           </p>
         </section>
 
@@ -203,11 +198,9 @@ export const articles = [
             <a href="https://supabase.com/" className="link link-primary">
               Supabase
             </a>{" "}
-            and create an account. It&apos;s free for up to 10,000 rows per
-            table.
+            and create an account. It&apos;s free for up to 10,000 rows per table.
             <br />
-            Then create a new project and a new table. You can use the following
-            SQL schema:
+            Then create a new project and a new table. You can use the following SQL schema:
           </p>
 
           <pre className={styles.code}>
@@ -228,9 +221,8 @@ export const articles = [
           <h3 className={styles.h3}>2. Add your credentials to ShipFast</h3>
           <p className={styles.p}>
             Copy the <span className={styles.codeInline}>API URL</span> and{" "}
-            <span className={styles.codeInline}>API Key</span> from your
-            Supabase project settings and add them to your ShipFast project
-            settings. Add these files to your project:
+            <span className={styles.codeInline}>API Key</span> from your Supabase project settings
+            and add them to your ShipFast project settings. Add these files to your project:
           </p>
 
           <ul className={styles.ul}>

@@ -37,10 +37,7 @@ const CrispChat = () => {
 
       // (Optional) If onlyShowOnRoutes array is not empty in config.js file, Crisp will be hidden on the routes in the array.
       // Use <AppButtonSupport> instead to show it (user clicks on the button to show Crisp—it cleans the UI)
-      if (
-        config.crisp.onlyShowOnRoutes &&
-        !config.crisp.onlyShowOnRoutes?.includes(pathname)
-      ) {
+      if (config.crisp.onlyShowOnRoutes && !config.crisp.onlyShowOnRoutes?.includes(pathname)) {
         Crisp.chat.hide();
         Crisp.chat.onChatClosed(() => {
           Crisp.chat.hide();
@@ -81,10 +78,7 @@ const ClientLayout = ({ children }) => {
       />
 
       {/* Show tooltips if any JSX elements has these 2 attributes: data-tooltip-id="tooltip" data-tooltip-content="" */}
-      <Tooltip
-        id="tooltip"
-        className="z-[60] !opacity-100 max-w-sm shadow-lg"
-      />
+      <Tooltip id="tooltip" className="z-[60] !opacity-100 max-w-sm shadow-lg" />
 
       {/* Set Crisp customer chat support */}
       <CrispChat />

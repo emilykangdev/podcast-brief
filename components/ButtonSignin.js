@@ -27,10 +27,7 @@ const ButtonSignin = ({ text = "Get started", extraStyle }) => {
 
   if (user) {
     return (
-      <Link
-        href={config.auth.callbackUrl}
-        className={`btn ${extraStyle ? extraStyle : ""}`}
-      >
+      <Link href={config.auth.callbackUrl} className={`btn ${extraStyle ? extraStyle : ""}`}>
         {user?.user_metadata?.avatar_url ? (
           <img
             src={user?.user_metadata?.avatar_url}
@@ -51,10 +48,7 @@ const ButtonSignin = ({ text = "Get started", extraStyle }) => {
   }
 
   return (
-    <Link
-      className={`btn ${extraStyle ? extraStyle : ""}`}
-      href={config.auth.loginUrl}
-    >
+    <Link className={`btn ${extraStyle ? extraStyle : ""}`} href={config.auth.loginUrl}>
       {text}
     </Link>
   );

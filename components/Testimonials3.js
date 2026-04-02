@@ -35,20 +35,14 @@ const Testimonial = ({ i }) => {
     <li key={i}>
       <figure className="relative max-w-lg h-full p-6 md:p-10 bg-base-200 rounded-2xl max-md:text-sm flex flex-col">
         <blockquote className="relative flex-1">
-          <p className="text-base-content/80 leading-relaxed">
-            {testimonial.text}
-          </p>
+          <p className="text-base-content/80 leading-relaxed">{testimonial.text}</p>
         </blockquote>
         <figcaption className="relative flex items-center justify-start gap-4 pt-4 mt-4 md:gap-8 md:pt-8 md:mt-8 border-t border-base-content/5">
           <div className="w-full flex items-center justify-between gap-2">
             <div>
-              <div className="font-medium text-base-content md:mb-0.5">
-                {testimonial.name}
-              </div>
+              <div className="font-medium text-base-content md:mb-0.5">{testimonial.name}</div>
               {testimonial.username && (
-                <div className="mt-0.5 text-sm text-base-content/80">
-                  @{testimonial.username}
-                </div>
+                <div className="mt-0.5 text-sm text-base-content/80">@{testimonial.username}</div>
               )}
             </div>
 
@@ -85,8 +79,7 @@ const Testimonials3 = () => {
             </h2>
           </div>
           <p className="lg:w-2/3 mx-auto leading-relaxed text-base text-base-content/80">
-            Don&apos;t take our word for it. Here&apos;s what they have to say
-            about ShipFast.
+            Don&apos;t take our word for it. Here&apos;s what they have to say about ShipFast.
           </p>
         </div>
 

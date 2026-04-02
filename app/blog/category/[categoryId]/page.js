@@ -5,9 +5,7 @@ import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
 
 export async function generateMetadata({ params }) {
-  const category = categories.find(
-    (category) => category.slug === params.categoryId
-  );
+  const category = categories.find((category) => category.slug === params.categoryId);
 
   return getSEOTags({
     title: `${category.title} | Blog by ${config.appName}`,
@@ -17,13 +15,9 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function Category({ params }) {
-  const category = categories.find(
-    (category) => category.slug === params.categoryId
-  );
+  const category = categories.find((category) => category.slug === params.categoryId);
   const articlesInCategory = articles
-    .filter((article) =>
-      article.categories.map((c) => c.slug).includes(category.slug)
-    )
+    .filter((article) => article.categories.map((c) => c.slug).includes(category.slug))
     .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
     .slice(0, 3);
 
@@ -33,9 +27,7 @@ export default async function Category({ params }) {
         <h1 className="font-extrabold text-3xl lg:text-5xl tracking-tight mb-6 md:mb-12">
           {category.title}
         </h1>
-        <p className="md:text-lg opacity-80 max-w-xl mx-auto">
-          {category.description}
-        </p>
+        <p className="md:text-lg opacity-80 max-w-xl mx-auto">{category.description}</p>
       </section>
 
       <section className="mb-24">
@@ -45,12 +37,7 @@ export default async function Category({ params }) {
 
         <div className="grid lg:grid-cols-2 gap-8">
           {articlesInCategory.map((article) => (
-            <CardArticle
-              key={article.slug}
-              article={article}
-              tag="h3"
-              showCategory={false}
-            />
+            <CardArticle key={article.slug} article={article} tag="h3" showCategory={false} />
           ))}
         </div>
       </section>

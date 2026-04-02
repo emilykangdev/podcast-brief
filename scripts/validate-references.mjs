@@ -3,26 +3,7 @@ import path from "path";
 import { chromium } from "playwright-core";
 import Browserbase from "@browserbasehq/sdk";
 
-// ── env check ─────────────────────────────────────────────────────────────────
-for (const key of ["BROWSERBASE_API_KEY", "BROWSERBASE_PROJECT_ID"]) {
-  if (!process.env[key]) { console.error(`Missing required env var: ${key}`); process.exit(1); }
-}
-
-// ── input arg + filename guard ────────────────────────────────────────────────
-const inputPath = process.argv[2];
-if (!inputPath) {
-  console.error("Usage: node scripts/validate-references.mjs <podcastID-references.json>");
-  process.exit(1);
-}
-const ext = path.extname(inputPath);
-const stem = path.basename(inputPath, ext);
-if (ext !== ".json" || !stem.endsWith("-references")) {
-  console.error(`Error: input must be a *-references.json file (got: ${path.basename(inputPath)})`);
-  process.exit(1);
-}
-const podcastID = stem.replace(/-references$/, "");
-
-// ── validate a single URL ─────────────────────────────────────────────────────
+// ── URL validation ────────────────────────────────────────────────────────────
 const ERROR_STRINGS = ["404", "not found", "page not found", "access denied", "forbidden"];
 
 async function validateUrl(page, url) {
@@ -50,104 +31,178 @@ async function ensureSinglePage(browser) {
   const ctx = browser.contexts()[0];
   const pages = ctx.pages();
   if (pages.length === 0) return ctx.newPage();
-  for (let i = 1; i < pages.length; i++) await pages[i].close(); // close any extras
+  for (let i = 1; i < pages.length; i++) await pages[i].close();
   return pages[0];
 }
 
-// ── main ──────────────────────────────────────────────────────────────────────
-// File existence: readFileSync throws with a decent message if file is missing,
-// but catch and re-throw with usage hint for clarity.
-let refs;
-try {
-  refs = JSON.parse(readFileSync(inputPath, "utf-8"));
-} catch (e) {
-  console.error(`Error: cannot read input file: ${e.message}`);
-  console.error(`Usage: node scripts/validate-references.mjs <podcastID-references.json>`);
-  process.exit(1);
+function isSessionDead(reason) {
+  return (
+    reason?.includes("Target closed") ||
+    reason?.includes("Session expired") ||
+    reason?.includes("Protocol error") ||
+    reason?.includes("Connection closed")
+  );
 }
-if (!Array.isArray(refs)) {
-  console.error("Error: input JSON must be an array");
-  process.exit(1);
-}
-console.error(`Validating ${refs.length} references via Browserbase...`);
 
-const bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY });
-const results = [];
-let browser;
-try {
+// ── Session management ────────────────────────────────────────────────────────
+async function connectSession(bb) {
   const session = await bb.sessions.create({ projectId: process.env.BROWSERBASE_PROJECT_ID });
-  browser = await chromium.connectOverCDP(session.connectUrl);
-  for (const ref of refs) {
+  return chromium.connectOverCDP(session.connectUrl);
+}
+
+// ── Per-URL validation with page-closed retry ─────────────────────────────────
+// "has been closed" means the page closed mid-navigation, not that the URL is bad.
+// Enforce one tab and retry once before giving up.
+async function checkUrl(browser, url) {
+  const page = await ensureSinglePage(browser);
+  let { valid, reason } = await validateUrl(page, url);
+  if (reason?.includes("has been closed")) {
+    console.error(`    ↺ ${url} (page closed mid-navigation, retrying...)`);
+    const freshPage = await ensureSinglePage(browser);
+    ({ valid, reason } = await validateUrl(freshPage, url));
+  }
+  return { valid, reason };
+}
+
+// Tries each candidate URL for a ref. Returns the first valid URL or null.
+// Throws SessionDeadError if the Browserbase session dies mid-ref.
+class SessionDeadError extends Error {
+  constructor({ ref, url, reason }) {
+    super("Browserbase session died");
+    this.ref = ref;
+    this.url = url;
+    this.deadReason = reason;
+  }
+}
+
+async function findValidUrl(browser, ref) {
+  for (const url of ref.candidates) {
+    const { valid, reason } = await checkUrl(browser, url);
+    if (isSessionDead(reason)) throw new SessionDeadError({ ref, url, reason });
+    if (valid) return url;
+    console.error(`    ✗ ${url} (${reason})`);
+  }
+  return null;
+}
+
+// Validates all refs starting from startIndex, pushing into results.
+// Throws SessionDeadError if the session dies.
+async function processRefs(browser, refs, startIndex, results) {
+  for (let i = startIndex; i < refs.length; i++) {
+    const ref = refs[i];
     if (!ref.candidates.length) {
       results.push({ name: ref.name, url: null });
       continue;
     }
-    let found = null;
-    let sessionDead = false;
-    for (const url of ref.candidates) {
-      // Enforce one tab before each candidate — closes any extras that accumulated
-      // (e.g. YouTube opening a popup) and recovers if the page closed entirely.
-      const page = await ensureSinglePage(browser);
-      let { valid, reason } = await validateUrl(page, url);
-
-      // "has been closed" means the page closed during navigation, not that the URL is bad.
-      // Enforce one tab again and retry that specific URL once before giving up.
-      if (reason?.includes("has been closed")) {
-        console.error(`    ↺ ${url} (page closed mid-navigation, retrying...)`);
-        const freshPage = await ensureSinglePage(browser);
-        ({ valid, reason } = await validateUrl(freshPage, url));
-      }
-
-      if (reason?.includes("Target closed") || reason?.includes("Session expired") || reason?.includes("Protocol error") || reason?.includes("Connection closed")) {
-        sessionDead = true;
-        results.push({ name: ref.name, url: null }); // keep results complete before breaking
-        // Structured JSON log to stdout — Railway indexes this for filtering/alerting
-        console.log(JSON.stringify({
-          level: "error",
-          message: "Browserbase session died mid-run",
-          podcastID,
-          referenceIndex: results.length, // 1-based index of the failing ref (pushed above, so length === index)
-          referenceTotal: refs.length,
-          reference: ref.name,
-          candidateIndex: ref.candidates.indexOf(url) + 1, // which URL was being tried (1 = first, 2 = second, 3 = third)
-          candidateTotal: ref.candidates.length,           // how many candidate URLs this reference had (1–3)
-          reason,
-          skipped: refs.length - results.length, // current ref already pushed above
-          action: "rerun validate-references.mjs to retry",
-        }));
-        break;
-      }
-      if (valid) { found = url; break; }
-      console.error(`    ✗ ${url} (${reason})`);
-    }
-    if (sessionDead) break; // break outer for loop too
-    if (found) {
-      console.error(`  ✓ ${ref.name}`);
-      results.push({ name: ref.name, url: found });
-    } else {
-      console.error(`  ✗ ${ref.name} (all candidates failed)`);
-      results.push({ name: ref.name, url: null });
-    }
+    const url = await findValidUrl(browser, ref);
+    results.push({ name: ref.name, url });
+    console.error(url ? `  ✓ ${ref.name}` : `  ✗ ${ref.name} (all candidates failed)`);
   }
-} finally {
-  await browser?.close();
 }
 
-const validated = results.filter((r) => r.url).length;
-console.error(`→ ${validated}/${results.length} validated`);
+// ── Output writing ────────────────────────────────────────────────────────────
+function writeResults(
+  results,
+  inputPath,
+  podcastID,
+  { partial = false, deadError = null, refs = [] } = {}
+) {
+  const validated = results.filter((r) => r.url).length;
+  const suffix = partial ? " (partial — session died twice)" : "";
+  console.error(`→ ${validated}/${results.length} validated${suffix}`);
 
-// ── write markdown for merge-references.mjs ───────────────────────────────────
-const lines = results.map((r) => r.url ? `- [${r.name}](${r.url})` : `- ${r.name}`);
-const output = `# Enriched References\n\n${lines.join("\n")}\n`;
+  const lines = results.map((r) => (r.url ? `- [${r.name}](${r.url})` : `- ${r.name}`));
+  const outPath = path.join(path.dirname(path.resolve(inputPath)), `${podcastID}-references.md`);
+  writeFileSync(outPath, `# Enriched References\n\n${lines.join("\n")}\n`, "utf-8");
+  console.error(`✓ Written to ${outPath}`);
 
-// Output path derived from input path — works with absolute paths from a backend server.
-// Avoids process.cwd() dependency; output always lands beside the input .json file.
-// NOTE: enrich-references.mjs still uses process.cwd()/briefs — that's a local-only script.
-const outPath = path.join(path.dirname(path.resolve(inputPath)), `${podcastID}-references.md`);
-try {
-  writeFileSync(outPath, output, "utf-8");
-} catch (e) {
-  console.error(`Error: cannot write output file: ${e.message}`);
-  process.exit(1);
+  if (deadError) {
+    console.log(
+      JSON.stringify({
+        level: "error",
+        message: "Browserbase session died mid-run (second death, giving up)",
+        podcastID,
+        referenceIndex: results.length,
+        referenceTotal: refs.length,
+        reference: deadError.ref.name,
+        candidateIndex: deadError.ref.candidates.indexOf(deadError.url) + 1,
+        candidateTotal: deadError.ref.candidates.length,
+        reason: deadError.deadReason,
+        skipped: refs.length - results.length,
+        action: "rerun validate-references.mjs to retry",
+      })
+    );
+  }
+
+  return { referencesMdPath: outPath, referencesJson: results };
 }
-console.error(`✓ Written to ${outPath}`);
+
+// ── exported run function ─────────────────────────────────────────────────────
+export async function run(inputPath) {
+  for (const key of ["BROWSERBASE_API_KEY", "BROWSERBASE_PROJECT_ID"]) {
+    if (!process.env[key]) throw new Error(`Missing required env var: ${key}`);
+  }
+
+  const ext = path.extname(inputPath);
+  const stem = path.basename(inputPath, ext);
+  if (ext !== ".json" || !stem.endsWith("-references")) {
+    throw new Error(
+      `Error: input must be a *-references.json file (got: ${path.basename(inputPath)})`
+    );
+  }
+  const podcastID = stem.replace(/-references$/, "");
+
+  let refs;
+  try {
+    refs = JSON.parse(readFileSync(inputPath, "utf-8"));
+  } catch (e) {
+    throw new Error(`Cannot read input file: ${e.message}`);
+  }
+  if (!Array.isArray(refs)) throw new Error("Input JSON must be an array");
+  console.error(`Validating ${refs.length} references via Browserbase...`);
+
+  const bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY });
+  const results = [];
+  let browser = await connectSession(bb);
+  let hasRetried = false;
+  let startIndex = 0;
+
+  try {
+    while (true) {
+      try {
+        await processRefs(browser, refs, startIndex, results);
+        break; // all refs processed successfully
+      } catch (err) {
+        if (!(err instanceof SessionDeadError) || hasRetried) {
+          return writeResults(results, inputPath, podcastID, {
+            partial: true,
+            deadError: err instanceof SessionDeadError ? err : null,
+            refs,
+          });
+        }
+        hasRetried = true;
+        browser.close().catch(() => {});
+        browser = await connectSession(bb);
+        startIndex = results.length; // resume from the ref that was in-flight
+      }
+    }
+  } finally {
+    await browser?.close();
+  }
+
+  return writeResults(results, inputPath, podcastID);
+}
+
+// ── CLI shim ──────────────────────────────────────────────────────────────────
+import { fileURLToPath } from "url";
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const inputPath = process.argv[2];
+  if (!inputPath) {
+    console.error("Usage: node scripts/validate-references.mjs <podcastID-references.json>");
+    process.exit(1);
+  }
+  run(inputPath).catch((err) => {
+    console.error(err.message);
+    process.exit(1);
+  });
+}

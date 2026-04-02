@@ -4,9 +4,9 @@ import { NextResponse } from "next/server";
 export async function updateSession(request) {
   // Skip auth refresh for API routes that don't need authentication
   const { pathname } = request.nextUrl;
-  const skipAuthRoutes = ['/api/webhook', '/api/lead'];
-  
-  if (skipAuthRoutes.some(route => pathname.startsWith(route))) {
+  const skipAuthRoutes = ["/api/webhook", "/api/lead"];
+
+  if (skipAuthRoutes.some((route) => pathname.startsWith(route))) {
     return NextResponse.next({
       request,
     });
@@ -25,9 +25,7 @@ export async function updateSession(request) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({
             request,
           });

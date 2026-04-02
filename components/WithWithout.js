@@ -11,9 +11,7 @@ const WithWithout = () => {
 
         <div className="flex flex-col md:flex-row justify-center items-center md:items-start gap-8 md:gap-12">
           <div className="bg-error/20 text-error p-8 md:p-12 rounded-lg w-full ">
-            <h3 className="font-bold text-lg mb-4">
-              Stripe invoices without ZenVoice
-            </h3>
+            <h3 className="font-bold text-lg mb-4">Stripe invoices without ZenVoice</h3>
 
             <ul className="list-disc list-inside space-y-1.5 ">
               {/* Pains the user is experiencing by not using your product */}
@@ -40,9 +38,7 @@ const WithWithout = () => {
           </div>
 
           <div className="bg-success/20 text-success p-8 md:p-12 rounded-lg w-full">
-            <h3 className="font-bold text-lg mb-4">
-              Stripe invoices + ZenVoice
-            </h3>
+            <h3 className="font-bold text-lg mb-4">Stripe invoices + ZenVoice</h3>
 
             <ul className="list-disc list-inside space-y-1.5 ">
               {/* Features of your product fixing the pain (try to match each with/withot lines) */}

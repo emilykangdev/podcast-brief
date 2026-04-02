@@ -17,9 +17,7 @@ const links = [
   },
 ];
 
-const cta = (
-  <ButtonSignin text="Prevent disputes" extraStyle="btn-primary md:btn-sm" />
-);
+const cta = <ButtonSignin text="Prevent disputes" extraStyle="btn-primary md:btn-sm" />;
 
 const ButtonPopoverCategories = () => {
   return (
@@ -35,9 +33,7 @@ const ButtonPopoverCategories = () => {
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
               fill="currentColor"
-              className={`w-5 h-5 duration-200 ${
-                open ? "transform rotate-180 " : ""
-              }`}
+              className={`w-5 h-5 duration-200 ${open ? "transform rotate-180 " : ""}`}
             >
               <path
                 fillRule="evenodd"
@@ -69,8 +65,7 @@ const ButtonPopoverCategories = () => {
                               {category?.titleShort || category.title}
                             </p>
                             <p className="text-sm opacity-80">
-                              {category?.descriptionShort ||
-                                category.description}
+                              {category?.descriptionShort || category.description}
                             </p>
                           </div>
                         </Link>
@@ -106,9 +101,7 @@ const ButtonAccordionCategories = () => {
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 20 20"
           fill="currentColor"
-          className={`w-5 h-5 duration-200 ${
-            isOpen ? "transform rotate-180 " : ""
-          }`}
+          className={`w-5 h-5 duration-200 ${isOpen ? "transform rotate-180 " : ""}`}
         >
           <path
             fillRule="evenodd"
@@ -251,11 +244,7 @@ const HeaderBlog = () => {
                 stroke="currentColor"
                 className="w-6 h-6"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6 18L18 6M6 6l12 12"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>

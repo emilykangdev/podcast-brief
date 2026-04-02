@@ -29,8 +29,7 @@ export async function POST(req) {
     if (!profile?.customer_id) {
       return NextResponse.json(
         {
-          error:
-            "You don't have a billing account yet. Make a purchase first.",
+          error: "You don't have a billing account yet. Make a purchase first.",
         },
         { status: 400 }
       );
