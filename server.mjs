@@ -39,14 +39,7 @@ const supabase = createClient(
 const app = express();
 app.use(express.json());
 
-// Auth — reject any request without the shared secret
-app.use((req, res, next) => {
-  if (req.headers.authorization !== `Bearer ${process.env.WORKER_SECRET}`) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
-});
-
+// Health check — must be before auth middleware so Railway can reach it unauthenticated
 app.get("/status", async (req, res) => {
   const { data, error } = await supabase
     .from("briefs")
@@ -56,6 +49,14 @@ app.get("/status", async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ activeJobs: data.length, jobs: data });
+});
+
+// Auth — reject any request without the shared secret
+app.use((req, res, next) => {
+  if (req.headers.authorization !== `Bearer ${process.env.WORKER_SECRET}`) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
 });
 
 app.post("/jobs/brief", (req, res) => {
