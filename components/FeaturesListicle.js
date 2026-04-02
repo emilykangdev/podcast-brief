@@ -198,26 +198,24 @@ const features = [
     description: (
       <>
         <ul className="space-y-2">
-          {["Mongoose schema", "Mongoose plugins to make your life easier"].map(
-            (item) => (
-              <li key={item} className="flex items-center gap-3">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="w-[18px] h-[18px] inline shrink-0 opacity-80"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+          {["Mongoose schema", "Mongoose plugins to make your life easier"].map((item) => (
+            <li key={item} className="flex items-center gap-3">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-[18px] h-[18px] inline shrink-0 opacity-80"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+                  clipRule="evenodd"
+                />
+              </svg>
 
-                {item}
-              </li>
-            )
-          )}
+              {item}
+            </li>
+          ))}
           <li className="flex items-center gap-3 text-accent font-medium">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -396,9 +394,7 @@ const FeaturesListicle = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       if (!hasClicked) {
-        const index = features.findIndex(
-          (feature) => feature.name === featureSelected
-        );
+        const index = features.findIndex((feature) => feature.name === featureSelected);
         const nextIndex = (index + 1) % features.length;
         setFeatureSelected(features[nextIndex].name);
       }
@@ -442,9 +438,9 @@ const FeaturesListicle = () => {
           </h2>
           <div className="text-base-content/80 leading-relaxed mb-8 lg:text-lg">
             {/* 💡 COPY TIP: Explain how your product delivers what you promise in the headline. */}
-            Login users, process payments and send emails at lightspeed. Spend
-            your time building your startup, not integrating APIs. ShipFast
-            provides you with the boilerplate code you need to launch, FAST.
+            Login users, process payments and send emails at lightspeed. Spend your time building
+            your startup, not integrating APIs. ShipFast provides you with the boilerplate code you
+            need to launch, FAST.
           </div>
         </div>
       </div>
@@ -471,9 +467,7 @@ const FeaturesListicle = () => {
               </span>
               <span
                 className={`font-semibold text-sm ${
-                  featureSelected === feature.name
-                    ? "text-primary"
-                    : "text-base-content/50"
+                  featureSelected === feature.name ? "text-primary" : "text-base-content/50"
                 }`}
               >
                 {feature.name}

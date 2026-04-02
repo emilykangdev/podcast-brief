@@ -49,14 +49,9 @@ const PrivacyPolicy = () => {
           </svg>{" "}
           Back
         </Link>
-        <h1 className="text-3xl font-extrabold pb-6">
-          Privacy Policy for {config.appName}
-        </h1>
+        <h1 className="text-3xl font-extrabold pb-6">Privacy Policy for {config.appName}</h1>
 
-        <pre
-          className="leading-relaxed whitespace-pre-wrap"
-          style={{ fontFamily: "sans-serif" }}
-        >
+        <pre className="leading-relaxed whitespace-pre-wrap" style={{ fontFamily: "sans-serif" }}>
           {`Last Updated: March 6, 2026
 
 PodcastBrief (“we,” “our,” or “us”) operates the website https://content-learner.vercel.app/

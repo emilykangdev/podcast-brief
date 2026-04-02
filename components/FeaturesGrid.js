@@ -4,8 +4,7 @@ import React from "react";
 const features = [
   {
     title: "Collect user feedback",
-    description:
-      "Use your Insighto's board to let users submit features they want.",
+    description: "Use your Insighto's board to let users submit features they want.",
     styles: "bg-primary text-primary-content",
     demo: (
       <div className="overflow-hidden h-full flex items-stretch">
@@ -66,9 +65,7 @@ const features = [
           >
             <div>
               <p className="font-semibold mb-1">{feature.text}</p>
-              <p className="text-base-content-secondary">
-                {feature.secondaryText}
-              </p>
+              <p className="text-base-content-secondary">{feature.secondaryText}</p>
             </div>
             <button
               className={`px-4 py-2 rounded-box group text-center text-lg duration-150 border border-transparent bg-primary text-primary-content`}
@@ -258,9 +255,7 @@ const FeaturesGrid = () => {
                 className={`${feature.styles} rounded-3xl flex flex-col gap-6 w-full h-[22rem] lg:h-[25rem] pt-6 overflow-hidden group`}
               >
                 <div className="px-6 space-y-2">
-                  <h3 className="font-bold text-xl lg:text-3xl tracking-tight">
-                    {feature.title}
-                  </h3>
+                  <h3 className="font-bold text-xl lg:text-3xl tracking-tight">{feature.title}</h3>
                   <p className="opacity-80">{feature.description}</p>
                 </div>
                 {feature.demo}

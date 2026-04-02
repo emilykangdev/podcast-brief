@@ -25,12 +25,10 @@ apiClient.interceptors.response.use(
       // User not authorized, must subscribe/purchase/pick a plan
       message = "Pick a plan to use this feature";
     } else {
-      message =
-        error?.response?.data?.error || error.message || error.toString();
+      message = error?.response?.data?.error || error.message || error.toString();
     }
 
-    error.message =
-      typeof message === "string" ? message : JSON.stringify(message);
+    error.message = typeof message === "string" ? message : JSON.stringify(message);
 
     console.error(error.message);
 

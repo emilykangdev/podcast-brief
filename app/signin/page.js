@@ -63,10 +63,7 @@ export default function Login() {
       </h1>
 
       <div className="space-y-8 max-w-xl mx-auto">
-        <form
-          className="form-control w-full space-y-4"
-          onSubmit={handleSignup}
-        >
+        <form className="form-control w-full space-y-4" onSubmit={handleSignup}>
           <input
             required
             type="email"
@@ -82,9 +79,7 @@ export default function Login() {
             disabled={isLoading || isDisabled}
             type="submit"
           >
-            {isLoading && (
-              <span className="loading loading-spinner loading-xs"></span>
-            )}
+            {isLoading && <span className="loading loading-spinner loading-xs"></span>}
             Send Magic Link
           </button>
         </form>

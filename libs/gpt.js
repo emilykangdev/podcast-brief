@@ -5,9 +5,7 @@ export const sendOpenAi = async (messages, userId, max = 100, temp = 1) => {
   const url = "https://api.openai.com/v1/chat/completions";
 
   console.log("Ask GPT >>>");
-  messages.map((m) =>
-    console.log(" - " + m.role.toUpperCase() + ": " + m.content)
-  );
+  messages.map((m) => console.log(" - " + m.role.toUpperCase() + ": " + m.content));
 
   const body = JSON.stringify({
     model: "gpt-4",

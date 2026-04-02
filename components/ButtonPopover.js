@@ -13,9 +13,7 @@ const ButtonPopover = () => {
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
               fill="currentColor"
-              className={`w-5 h-5 duration-200 ${
-                open ? "transform rotate-180 " : ""
-              }`}
+              className={`w-5 h-5 duration-200 ${open ? "transform rotate-180 " : ""}`}
             >
               <path
                 fillRule="evenodd"
@@ -59,9 +57,7 @@ const ButtonPopover = () => {
                     </span>
                     <div className="">
                       <p className="font-bold">Get Started</p>
-                      <p className="opacity-70">
-                        Loreum ipseum de la madre de papa
-                      </p>
+                      <p className="opacity-70">Loreum ipseum de la madre de papa</p>
                     </div>
                   </div>
                   <div className="text-sm flex items-center gap-3 p-2 cursor-pointer hover:bg-base-200 rounded-lg duration-200">
@@ -83,9 +79,7 @@ const ButtonPopover = () => {
                     </span>
                     <div className="">
                       <p className="font-bold">Rewards</p>
-                      <p className="opacity-70">
-                        Loreum ipseum de el papi de la mama
-                      </p>
+                      <p className="opacity-70">Loreum ipseum de el papi de la mama</p>
                     </div>
                   </div>
                   <div className="text-sm flex items-center gap-3 p-2 cursor-pointer hover:bg-base-200 rounded-lg duration-200">
@@ -107,9 +101,7 @@ const ButtonPopover = () => {
                     </span>
                     <div className="">
                       <p className="font-bold">Academics</p>
-                      <p className="opacity-70">
-                        Loreum ipseum de la madre de papa
-                      </p>
+                      <p className="opacity-70">Loreum ipseum de la madre de papa</p>
                     </div>
                   </div>
                 </div>

@@ -20,11 +20,7 @@ export async function GET(req) {
   if (user) {
     // Use select+limit(1) instead of count — simpler, avoids full COUNT(*) scan.
     // If query fails, data is null and we fall through to /dashboard (acceptable default).
-    const { data } = await supabase
-      .from("briefs")
-      .select("id")
-      .eq("profile_id", user.id)
-      .limit(1);
+    const { data } = await supabase.from("briefs").select("id").eq("profile_id", user.id).limit(1);
 
     if (data?.length === 0) {
       return NextResponse.redirect(new URL("/onboarding", requestUrl.origin));

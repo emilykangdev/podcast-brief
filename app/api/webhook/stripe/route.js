@@ -13,10 +13,7 @@ export async function POST(req) {
   // Check for required environment variables
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
     console.error("Missing required Stripe environment variables");
-    return NextResponse.json(
-      { error: "Server configuration error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
   }
 
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
@@ -37,7 +34,7 @@ export async function POST(req) {
     process.env.SUPABASE_SECRET_KEY,
     {
       auth: { persistSession: false },
-      realtime: { disabled: true }
+      realtime: { disabled: true },
     }
   );
 
@@ -90,16 +87,16 @@ export async function POST(req) {
               throw authError;
             }
 
-            user = data?.user;            
+            user = data?.user;
             if (user?.id) {
-              await new Promise(resolve => setTimeout(resolve, 100));
-              
+              await new Promise((resolve) => setTimeout(resolve, 100));
+
               const { data: existingProfile } = await supabase
                 .from("profiles")
                 .select("*")
                 .eq("id", user.id)
                 .single();
-              
+
               if (existingProfile) {
                 user = existingProfile;
               }
@@ -121,15 +118,13 @@ export async function POST(req) {
           throw new Error("User ID is required for profile creation");
         }
 
-        const { error } = await supabase
-          .from("profiles")
-          .upsert({
-            id: user.id,
-            email: customer.email,
-            customer_id: customerId,
-            price_id: priceId,
-            has_access: true,
-          });
+        const { error } = await supabase.from("profiles").upsert({
+          id: user.id,
+          email: customer.email,
+          customer_id: customerId,
+          price_id: priceId,
+          has_access: true,
+        });
 
         if (error) {
           console.error("Failed to upsert profile:", error);
@@ -163,9 +158,7 @@ export async function POST(req) {
         // The customer subscription stopped
         // ❌ Revoke access to the product
         const stripeObject = event.data.object;
-        const subscription = await stripe.subscriptions.retrieve(
-          stripeObject.id
-        );
+        const subscription = await stripe.subscriptions.retrieve(stripeObject.id);
 
         await supabase
           .from("profiles")
@@ -192,10 +185,7 @@ export async function POST(req) {
         if (profile.price_id !== priceId) break;
 
         // Grant the profile access to your product. It's a boolean in the database, but could be a number of credits, etc...
-        await supabase
-          .from("profiles")
-          .update({ has_access: true })
-          .eq("customer_id", customerId);
+        await supabase.from("profiles").update({ has_access: true }).eq("customer_id", customerId);
 
         break;
       }

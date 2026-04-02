@@ -8,52 +8,10 @@ import { createClient } from "@supabase/supabase-js";
 // 1 — general error (missing args, missing files, API failure, etc.)
 // 2 — brief already exists for this (profile_id, input_url) — HTTP wrapper maps to 409
 
-// ── node version check ────────────────────────────────────────────────────────
-if (parseInt(process.versions.node) < 18) {
-  console.error("Error: Node 18+ required");
-  process.exit(1);
-}
+export class BriefExistsError extends Error {}
 
-// ── env checks ────────────────────────────────────────────────────────────────
-for (const key of ["OPENROUTER_API_KEY", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SECRET_KEY"]) {
-  if (!process.env[key]) {
-    console.error(`Missing required env var: ${key}`);
-    process.exit(1);
-  }
-}
-
-// ── arg checks ────────────────────────────────────────────────────────────────
-const args = process.argv.slice(2);
-const force = args.includes("--force");
-const positional = args.filter((a) => a !== "--force");
-const [transcriptId, transcriptPath, profileId] = positional;
-if (!transcriptId || !transcriptPath || !profileId) {
-  console.error('Usage: node --env-file=.env.local scripts/generate-brief.mjs <transcriptId> <transcript.md> <profileId> [--force]');
-  console.error('       --force: skip 409 check and delete existing row before regenerating (dev only)');
-  process.exit(1);
-}
-if (!transcriptPath.endsWith(".md")) {
-  console.error("Error: transcript must be a .md file");
-  process.exit(1);
-}
-if (!existsSync(transcriptPath)) {
-  console.error(`Error: file not found: ${transcriptPath}`);
-  process.exit(1);
-}
-
-// ── load prompt ───────────────────────────────────────────────────────────────
-const promptPath = join(dirname(fileURLToPath(import.meta.url)), "../prompts/extract_wisdom.md");
-if (!existsSync(promptPath)) {
-  console.error(`Error: prompt file not found: ${promptPath}`);
-  process.exit(1);
-}
-const SYSTEM = readFileSync(promptPath, "utf-8");
-
-// ── load transcript ───────────────────────────────────────────────────────────
-const transcript = readFileSync(transcriptPath, "utf-8");
-
-// ── clients ───────────────────────────────────────────────────────────────────
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
+// A "generating" row older than this is assumed to be from a crashed run and will be replaced.
+const STALE_GENERATING_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ── callOpenRouter ────────────────────────────────────────────────────────────
 async function callOpenRouter(system, user, { maxTokens = 16000 } = {}) {
@@ -78,7 +36,8 @@ async function callOpenRouter(system, user, { maxTokens = 16000 } = {}) {
     throw new Error(`OpenRouter error ${res.status}: ${err.error?.message ?? "unknown"}`);
   }
   const data = await res.json();
-  if (!data.choices?.length) throw new Error(`OpenRouter returned no choices: ${JSON.stringify(data)}`);
+  if (!data.choices?.length)
+    throw new Error(`OpenRouter returned no choices: ${JSON.stringify(data)}`);
   return data.choices[0].message.content;
 }
 
@@ -90,10 +49,16 @@ function chunkTranscript(text) {
   const chunks = [];
   let remaining = text;
   while (remaining.length > 0) {
-    if (remaining.length <= CHUNK_CHAR_SIZE) { chunks.push(remaining); break; }
+    if (remaining.length <= CHUNK_CHAR_SIZE) {
+      chunks.push(remaining);
+      break;
+    }
     const slice = remaining.slice(0, CHUNK_CHAR_SIZE);
     const lastTurn = slice.lastIndexOf("\n\n**["); // turns are separated by \n\n in transcribe.mjs
-    if (lastTurn < 0) console.error(`  Warning: no turn boundary found in chunk ${chunks.length + 1}, splitting at char limit`);
+    if (lastTurn < 0)
+      console.error(
+        `  Warning: no turn boundary found in chunk ${chunks.length + 1}, splitting at char limit`
+      );
     const splitAt = lastTurn >= 0 ? lastTurn : CHUNK_CHAR_SIZE;
     chunks.push(remaining.slice(0, splitAt));
     remaining = remaining.slice(splitAt);
@@ -102,10 +67,13 @@ function chunkTranscript(text) {
 }
 
 // ── extraction ────────────────────────────────────────────────────────────────
-async function extractChunk(chunkText, index, total) {
+async function extractChunk(SYSTEM, chunkText, index, total, promptAddition) {
   const label = total > 1 ? ` (chunk ${index + 1}/${total})` : "";
   console.error(`  Extracting${label}...`);
-  const userContent = `Transcript${total > 1 ? ` segment ${index + 1} of ${total}` : ""}:\n${chunkText}`;
+  let userContent = `Transcript${total > 1 ? ` segment ${index + 1} of ${total}` : ""}:\n${chunkText}`;
+  if (promptAddition != null) {
+    userContent += `\n\nAdditional instruction: ${promptAddition}`;
+  }
   return callOpenRouter(SYSTEM, userContent);
 }
 
@@ -133,8 +101,77 @@ IMPORTANT: The output should feel like it came from one coherent pass over the f
   return callOpenRouter(MERGE_SYSTEM, userContent, { maxTokens: 16000 });
 }
 
-// ── main ──────────────────────────────────────────────────────────────────────
-try {
+// Throws BriefExistsError if a non-stale brief already exists.
+// Deletes stale or force-replaced rows so the caller can insert a fresh one.
+async function resolveExistingBrief(existing, { force, supabase }) {
+  if (!existing) return;
+  if (force) {
+    console.error(`--force: deleting existing ${existing.status} row and regenerating...`);
+    await supabase.from("briefs").delete().eq("id", existing.id);
+    return;
+  }
+  if (existing.status === "complete") {
+    throw new BriefExistsError("Brief already exists (complete) — skipping generation");
+  }
+  // status === "generating" — check if stale (older than STALE_GENERATING_TIMEOUT_MS = crashed run)
+  const ageMs = Date.now() - new Date(existing.updated_at).getTime();
+  if (ageMs < STALE_GENERATING_TIMEOUT_MS) {
+    throw new BriefExistsError("Brief is currently generating — try again shortly");
+  }
+  console.error("Stale generating row found (crashed run) — retrying...");
+  await supabase.from("briefs").delete().eq("id", existing.id);
+}
+
+// ── main export ───────────────────────────────────────────────────────────────
+export async function run({
+  transcriptId,
+  transcriptPath,
+  profileId,
+  force = false,
+  promptAddition = null,
+  outputDir,
+} = {}) {
+  if (!outputDir) outputDir = process.cwd();
+
+  // ── node version check
+  if (parseInt(process.versions.node) < 18) {
+    throw new Error("Node 18+ required");
+  }
+
+  // ── env checks
+  for (const key of ["OPENROUTER_API_KEY", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SECRET_KEY"]) {
+    if (!process.env[key]) {
+      throw new Error(`Missing required env var: ${key}`);
+    }
+  }
+
+  // ── arg checks
+  if (!transcriptId || !transcriptPath || !profileId) {
+    throw new Error("transcriptId, transcriptPath, and profileId are required");
+  }
+  if (!transcriptPath.endsWith(".md")) {
+    throw new Error("Error: transcript must be a .md file");
+  }
+  if (!existsSync(transcriptPath)) {
+    throw new Error(`Error: file not found: ${transcriptPath}`);
+  }
+
+  // ── load prompt
+  const promptPath = join(dirname(fileURLToPath(import.meta.url)), "../prompts/extract_wisdom.md");
+  if (!existsSync(promptPath)) {
+    throw new Error(`Error: prompt file not found: ${promptPath}`);
+  }
+  const SYSTEM = readFileSync(promptPath, "utf-8");
+
+  // ── load transcript
+  const transcript = readFileSync(transcriptPath, "utf-8");
+
+  // ── client
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SECRET_KEY
+  );
+
   console.error("Generating brief...");
 
   // 409 check — if a complete or in-progress brief already exists, do not generate
@@ -146,25 +183,7 @@ try {
     .eq("profile_id", profileId)
     .in("status", ["complete", "generating"])
     .maybeSingle();
-  if (existing) {
-    if (force) {
-      console.error(`--force: deleting existing ${existing.status} row and regenerating...`);
-      await supabase.from("briefs").delete().eq("id", existing.id);
-    } else if (existing.status === "complete") {
-      console.error("Brief already exists (complete) — skipping generation");
-      process.exit(2); // HTTP wrapper maps exit code 2 → 409
-    } else {
-      // status === "generating" — check if stale (>5 min = crashed run)
-      const ageMs = Date.now() - new Date(existing.updated_at).getTime();
-      if (ageMs < 5 * 60 * 1000) {
-        console.error("Brief is currently generating — try again shortly");
-        process.exit(2);
-      }
-      // stale generating row — delete it and proceed with a fresh run
-      console.error("Stale generating row found (crashed run) — retrying...");
-      await supabase.from("briefs").delete().eq("id", existing.id);
-    }
-  }
+  await resolveExistingBrief(existing, { force, supabase });
 
   // insert generating row before API calls so crashes leave a visible row
   const { data: briefRow, error: insertError } = await supabase
@@ -178,28 +197,47 @@ try {
   const chunks = chunkTranscript(transcript);
   if (chunks.length > 1) console.error(`  → ${chunks.length} chunks`);
 
-  const chunkBriefs = await Promise.all(chunks.map((chunk, i) => extractChunk(chunk, i, chunks.length)));
+  const chunkBriefs = await Promise.all(
+    chunks.map((chunk, i) => extractChunk(SYSTEM, chunk, i, chunks.length, promptAddition))
+  );
   const brief = await mergeChunks(chunkBriefs);
 
-  // write file first (durable), then stdout
-  mkdirSync("briefs", { recursive: true });
+  // write file
+  mkdirSync(outputDir, { recursive: true });
   let version = 1;
-  while (existsSync(`briefs/${transcriptId}-output-v${version}.md`)) version++;
-  const outputFile = `briefs/${transcriptId}-output-v${version}.md`;
+  while (existsSync(join(outputDir, `${transcriptId}-output-v${version}.md`))) version++;
+  const outputPath = join(outputDir, `${transcriptId}-output-v${version}.md`);
   const disclaimer = `> Disclaimer: Speaker accreditation may not be 100% correct. Please confirm references — they are a starting point.\n\n`;
-  writeFileSync(outputFile, disclaimer + brief, "utf-8");
-  console.error(`✓ Brief written to ${outputFile}`);
-  process.stdout.write(disclaimer + brief);
+  writeFileSync(outputPath, disclaimer + brief, "utf-8");
+  console.error(`✓ Brief written to ${outputPath}`);
 
-  // update brief row to complete
+  // update brief row
   console.error("  Saving to Supabase...");
   const { error: updateError } = await supabase
     .from("briefs")
-    .update({ output_markdown: brief, status: "complete", completed_at: new Date().toISOString() })
+    .update({ output_markdown: brief, status: "generating" })
     .eq("id", briefId);
   if (updateError) throw new Error(`Supabase update failed: ${updateError.message}`);
   console.error("✓ Saved to briefs table");
-} catch (err) {
-  console.error(`Error: ${err.message}`);
-  process.exit(1);
+
+  return { briefId, outputPath, outputMd: disclaimer + brief };
+}
+
+// ── CLI shim ──────────────────────────────────────────────────────────────────
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const args = process.argv.slice(2);
+  const force = args.includes("--force");
+  const positional = args.filter((a) => a !== "--force");
+  const [transcriptId, transcriptPath, profileId] = positional;
+  if (!transcriptId || !transcriptPath || !profileId) {
+    console.error(
+      "Usage: node --env-file=.env.local scripts/generate-brief.mjs <transcriptId> <transcript.md> <profileId> [--force]"
+    );
+    process.exit(1);
+  }
+  run({ transcriptId, transcriptPath, profileId, force }).catch((err) => {
+    console.error(err.message);
+    process.exit(err instanceof BriefExistsError ? 2 : 1);
+  });
 }

@@ -22,18 +22,14 @@ export default async function Blog() {
           The {config.appName} Blog
         </h1>
         <p className="text-lg opacity-80 leading-relaxed">
-          Learn how to ship your startup in days, not weeks. And get the latest
-          updates about the boilerplate
+          Learn how to ship your startup in days, not weeks. And get the latest updates about the
+          boilerplate
         </p>
       </section>
 
       <section className="grid lg:grid-cols-2 mb-24 md:mb-32 gap-8">
         {articlesToDisplay.map((article, i) => (
-          <CardArticle
-            article={article}
-            key={article.slug}
-            isImagePriority={i <= 2}
-          />
+          <CardArticle article={article} key={article.slug} isImagePriority={i <= 2} />
         ))}
       </section>
 

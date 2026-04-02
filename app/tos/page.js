@@ -49,14 +49,9 @@ const TOS = () => {
           </svg>
           Back
         </Link>
-        <h1 className="text-3xl font-extrabold pb-6">
-          Terms and Conditions for {config.appName}
-        </h1>
+        <h1 className="text-3xl font-extrabold pb-6">Terms and Conditions for {config.appName}</h1>
 
-        <pre
-          className="leading-relaxed whitespace-pre-wrap"
-          style={{ fontFamily: "sans-serif" }}
-        >
+        <pre className="leading-relaxed whitespace-pre-wrap" style={{ fontFamily: "sans-serif" }}>
           {`Last Updated: March 6, 2026
 
 Welcome to PodcastBrief. These Terms of Service (“Terms”) govern your use of the PodcastBrief website and services available at:

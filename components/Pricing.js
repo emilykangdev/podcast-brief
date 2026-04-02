@@ -30,9 +30,7 @@ const Pricing = () => {
               )}
 
               {plan.isFeatured && (
-                <div
-                  className={`absolute -inset-[1px] rounded-[9px] bg-primary z-10`}
-                ></div>
+                <div className={`absolute -inset-[1px] rounded-[9px] bg-primary z-10`}></div>
               )}
 
               <div className="relative flex flex-col h-full gap-5 lg:gap-8 z-10 bg-base-100 p-8 rounded-lg">
@@ -40,9 +38,7 @@ const Pricing = () => {
                   <div>
                     <p className="text-lg lg:text-xl font-bold">{plan.name}</p>
                     {plan.description && (
-                      <p className="text-base-content/80 mt-2">
-                        {plan.description}
-                      </p>
+                      <p className="text-base-content/80 mt-2">{plan.description}</p>
                     )}
                   </div>
                 </div>
@@ -51,19 +47,13 @@ const Pricing = () => {
                     <div className="flex flex-col justify-end mb-[4px] text-lg ">
                       <p className="relative">
                         <span className="absolute bg-base-content h-[1.5px] inset-x-0 top-[53%]"></span>
-                        <span className="text-base-content/80">
-                          ${plan.priceAnchor}
-                        </span>
+                        <span className="text-base-content/80">${plan.priceAnchor}</span>
                       </p>
                     </div>
                   )}
-                  <p className={`text-5xl tracking-tight font-extrabold`}>
-                    ${plan.price}
-                  </p>
+                  <p className={`text-5xl tracking-tight font-extrabold`}>${plan.price}</p>
                   <div className="flex flex-col justify-end mb-[4px]">
-                    <p className="text-xs text-base-content/60 uppercase font-semibold">
-                      USD
-                    </p>
+                    <p className="text-xs text-base-content/60 uppercase font-semibold">USD</p>
                   </div>
                 </div>
                 {plan.features && (

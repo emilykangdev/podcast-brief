@@ -168,13 +168,9 @@ const Testimonial = ({ i }) => {
           </div>
           <div className="w-full flex items-end justify-between gap-2">
             <div>
-              <div className="text-sm font-medium text-base-content">
-                {testimonial.name}
-              </div>
+              <div className="text-sm font-medium text-base-content">{testimonial.name}</div>
               {testimonial.username && (
-                <div className="mt-0.5 text-sm text-base-content/80">
-                  @{testimonial.username}
-                </div>
+                <div className="mt-0.5 text-sm text-base-content/80">@{testimonial.username}</div>
               )}
             </div>
 
@@ -245,10 +241,7 @@ const VideoTestimonial = ({ i }) => {
             setIsLoading(false);
           }}
         >
-          <source
-            src={testimonial.videoSrc}
-            type={testimonial.videoType || "video/mp4"}
-          />
+          <source src={testimonial.videoSrc} type={testimonial.videoType || "video/mp4"} />
           Your browser does not support the videos
         </video>
 
@@ -298,9 +291,7 @@ const VideoTestimonial = ({ i }) => {
 
             {!isPlaying && (
               <div className="animate-opacity text-right">
-                <p className="text-gray-50 font-medium drop-shadow">
-                  {testimonial.name}
-                </p>
+                <p className="text-gray-50 font-medium drop-shadow">{testimonial.name}</p>
                 <div className="rating">
                   {[...Array(5)].map((_, i) => (
                     <svg
@@ -342,8 +333,8 @@ const Testimonials11 = () => {
             </h2>
           </div>
           <p className="lg:w-2/3 mx-auto leading-relaxed text-base text-base-content/80">
-            Don&apos;t take our word for it. Here&apos;s what they have to say
-            about {config.appName}.
+            Don&apos;t take our word for it. Here&apos;s what they have to say about{" "}
+            {config.appName}.
           </p>
         </div>
 
@@ -375,9 +366,7 @@ const Testimonials11 = () => {
                         <Image
                           className="w-12 h-12 rounded-full object-cover"
                           src={list[list.length - 1].img}
-                          alt={`${
-                            list[list.length - 1].name
-                          }'s testimonial for ${config.appName}`}
+                          alt={`${list[list.length - 1].name}'s testimonial for ${config.appName}`}
                           width={48}
                           height={48}
                         />

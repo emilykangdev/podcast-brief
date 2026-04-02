@@ -1,29 +1,17 @@
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import path from "path";
 import Exa from "exa-js";
-
-// ── env check ─────────────────────────────────────────────────────────────────
-for (const key of ["OPENROUTER_API_KEY", "EXA_API_KEY"]) {
-  if (!process.env[key]) {
-    console.error(`Missing required env var: ${key}`);
-    process.exit(1);
-  }
-}
-
-const exa = new Exa(process.env.EXA_API_KEY);
+import { extractSection } from "./markdown.mjs";
 
 // ── parse references from extract_wisdom markdown ─────────────────────────────
 function parseReferences(markdown) {
-  const lines = markdown.split("\n");
-  const start = lines.findIndex((l) => /^#{1,3}\s*REFERENCES/i.test(l));
-  if (start === -1) return [];
-  const refs = [];
-  for (let i = start + 1; i < lines.length; i++) {
-    if (/^#{1,3}\s/.test(lines[i])) break;
-    const match = lines[i].match(/^[-*]\s+(.+)/);
-    if (match) refs.push(match[1].trim());
-  }
-  return refs;
+  const section = extractSection(markdown, "REFERENCES");
+  if (!section) return [];
+  return section.content
+    .split("\n")
+    .map((line) => line.match(/^[-*]\s+(.+)/))
+    .filter(Boolean)
+    .map((match) => match[1].trim());
 }
 
 // ── AI filter + normalize ─────────────────────────────────────────────────────
@@ -75,15 +63,15 @@ Return JSON only: { "refs": [{ "name": "display name", "query": "exa search quer
 
 // ── Exa search ────────────────────────────────────────────────────────────────
 // Returns { candidates, error } — never silently null on failure.
-async function exaSearch(query) {
+async function exaSearch(exa, query) {
   try {
     // 3 candidates per reference gives validate-references.mjs fallback options without a second Exa call
     const response = await exa.search(query, {
       numResults: 3,
       type: "auto", // explicit default — Exa changed auto to default in 2024, being explicit for clarity
       excludeDomains: [
-        "linkedin.com",  // prefer official bios, publisher pages, or editorial articles
-        "google.com",    // avoid Google redirect/search URLs
+        "linkedin.com", // prefer official bios, publisher pages, or editorial articles
+        "google.com", // avoid Google redirect/search URLs
       ],
     });
     const candidates = response.results.map((r) => r.url); // url is always a string per Exa OpenAPI spec
@@ -97,53 +85,74 @@ async function exaSearch(query) {
 async function batchedAll(items, fn, batchSize = 5) {
   const results = [];
   for (let i = 0; i < items.length; i += batchSize) {
-    results.push(...await Promise.all(items.slice(i, i + batchSize).map(fn)));
+    results.push(...(await Promise.all(items.slice(i, i + batchSize).map(fn))));
   }
   return results;
 }
 
-// ── main ──────────────────────────────────────────────────────────────────────
-const inputPath = process.argv[2];
-if (!inputPath) {
-  console.error("Usage: node scripts/enrich-references.mjs <extract-wisdom-output.md>");
-  process.exit(1);
+// ── exported run function ─────────────────────────────────────────────────────
+export async function run(briefPath, { outputDir } = {}) {
+  // ── env check ───────────────────────────────────────────────────────────────
+  for (const key of ["OPENROUTER_API_KEY", "EXA_API_KEY"]) {
+    if (!process.env[key]) {
+      throw new Error(`Missing required env var: ${key}`);
+    }
+  }
+
+  const exa = new Exa(process.env.EXA_API_KEY);
+  outputDir = outputDir ?? path.join(process.cwd(), "briefs");
+
+  const markdown = readFileSync(briefPath, "utf-8");
+  const names = parseReferences(markdown);
+  if (names.length === 0) {
+    console.error("No REFERENCES section found in input.");
+    return { referencesJsonPath: null };
+  }
+
+  console.error(`Found ${names.length} references. Filtering and normalizing via AI...`);
+  let filtered = await filterAndNormalize(names);
+  console.error(`→ ${filtered.length}/${names.length} kept`);
+
+  if (filtered.length > 50) {
+    console.error(`WARNING: ${filtered.length} references found, capping at 50`);
+    filtered = filtered.slice(0, 50);
+  }
+
+  if (filtered.length === 0) {
+    console.error("All references filtered out — nothing to write.");
+    return { referencesJsonPath: null };
+  }
+
+  console.error("Fetching candidates via Exa...");
+  const resolved = await batchedAll(filtered, async ({ name, query }) => {
+    const { candidates, error } = await exaSearch(exa, query);
+    if (error && !candidates.length) console.error(`  ⚠ "${name}": ${error}`);
+    return { name, candidates };
+  });
+  const found = resolved.filter((r) => r.candidates.length > 0).length;
+  console.error(`→ ${found}/${resolved.length} with candidates`);
+
+  // Strip "-output" suffix so "abc123-output.md" → "abc123-references.json" not "abc123-output-references.json"
+  const stem = path.basename(briefPath, path.extname(briefPath));
+  const podcastID = stem.replace(/-output.*$/, "");
+  mkdirSync(outputDir, { recursive: true });
+  const outPath = path.join(outputDir, `${podcastID}-references.json`);
+  writeFileSync(outPath, JSON.stringify(resolved, null, 2), "utf-8");
+  console.error(`✓ Written to ${outPath}`);
+
+  return { referencesJsonPath: outPath };
 }
 
-const markdown = readFileSync(inputPath, "utf-8");
-const names = parseReferences(markdown);
-if (names.length === 0) {
-  console.error("No REFERENCES section found in input.");
-  process.exit(0);
+// ── CLI shim ──────────────────────────────────────────────────────────────────
+import { fileURLToPath } from "url";
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const inputPath = process.argv[2];
+  if (!inputPath) {
+    console.error("Usage: node scripts/enrich-references.mjs <extract-wisdom-output.md>");
+    process.exit(1);
+  }
+  run(inputPath).catch((err) => {
+    console.error(err.message);
+    process.exit(1);
+  });
 }
-
-console.error(`Found ${names.length} references. Filtering and normalizing via AI...`);
-let filtered = await filterAndNormalize(names);
-console.error(`→ ${filtered.length}/${names.length} kept`);
-
-if (filtered.length > 50) {
-  console.error(`WARNING: ${filtered.length} references found, capping at 50`);
-  filtered = filtered.slice(0, 50);
-}
-
-if (filtered.length === 0) {
-  console.error("All references filtered out — nothing to write.");
-  process.exit(0);
-}
-
-console.error("Fetching candidates via Exa...");
-const resolved = await batchedAll(filtered, async ({ name, query }) => {
-  const { candidates, error } = await exaSearch(query);
-  if (error && !candidates.length) console.error(`  ⚠ "${name}": ${error}`);
-  return { name, candidates };
-});
-const found = resolved.filter((r) => r.candidates.length > 0).length;
-console.error(`→ ${found}/${resolved.length} with candidates`);
-
-// Strip "-output" suffix so "abc123-output.md" → "abc123-references.json" not "abc123-output-references.json"
-const stem = path.basename(inputPath, path.extname(inputPath));
-const podcastID = stem.replace(/-output.*$/, "");
-const brifsDir = path.join(process.cwd(), "briefs");
-mkdirSync(brifsDir, { recursive: true });
-const outPath = path.join(brifsDir, `${podcastID}-references.json`);
-writeFileSync(outPath, JSON.stringify(resolved, null, 2), "utf-8");
-console.error(`✓ Written to ${outPath}`);
