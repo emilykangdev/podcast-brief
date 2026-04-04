@@ -2,6 +2,7 @@ import express from "express";
 import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
+import { writeFileSync } from "fs";
 import { mkdir, rm } from "fs/promises";
 import supabase from "./libs/supabase/admin.js";
 import { run as transcribe } from "./scripts/transcribe.mjs";
@@ -13,6 +14,8 @@ import { briefHasAllSections, briefHasReferences } from "./scripts/validate_pipe
 import { cleanUrl } from "./libs/url.js";
 
 const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
+const STALE_JOB_TIMEOUT_MS = 20 * 60 * 1000;
+const POLL_INTERVAL_MS = 5000;
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 function log(...args) {
@@ -143,7 +146,6 @@ async function generateBriefWithValidation({
   if (!refsCheck2.valid) {
     errorLog.push({ step: "validate-output", attempt: 2, reason: refsCheck2.reason });
     outputMd += "\n\n## REFERENCES\n\nNo references found.\n";
-    const { writeFileSync } = await import("fs");
     writeFileSync(outputPath, outputMd, "utf-8");
   }
 
@@ -224,7 +226,7 @@ async function recoverStaleJobs() {
     .update({ status: "queued", started_at: null })
     .eq("status", "generating")
     .eq("environment", APP_ENV)
-    .lt("started_at", new Date(Date.now() - 20 * 60 * 1000).toISOString())
+    .lt("started_at", new Date(Date.now() - STALE_JOB_TIMEOUT_MS).toISOString())
     .select("id");
   if (error) logError(`[recovery] Error recovering stale jobs: ${error.message}`);
   if (data?.length) log(`[recovery] Reset ${data.length} stale generating job(s) to queued`);
@@ -234,45 +236,46 @@ let isProcessing = false;
 
 async function pollForWork() {
   if (isProcessing) return;
-
-  // Find oldest queued job for this environment
-  const { data: jobs } = await supabase
-    .from("briefs")
-    .select("id, input_url, profile_id")
-    .eq("status", "queued")
-    .eq("environment", APP_ENV)
-    .order("created_at", { ascending: true })
-    .limit(1);
-
-  if (!jobs?.length) return;
-  const job = jobs[0];
-
-  // Atomic claim
-  const { data: claimed } = await supabase
-    .from("briefs")
-    .update({ status: "generating", started_at: new Date().toISOString() })
-    .eq("id", job.id)
-    .eq("status", "queued")
-    .select("id, input_url, profile_id");
-
-  if (!claimed?.length) return; // another worker claimed it
-
   isProcessing = true;
+
   try {
+    // Find oldest queued job for this environment
+    const { data: jobs } = await supabase
+      .from("briefs")
+      .select("id, input_url, profile_id")
+      .eq("status", "queued")
+      .eq("environment", APP_ENV)
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    if (!jobs?.length) return;
+    const job = jobs[0];
+
+    // Atomic claim
+    const { data: claimed } = await supabase
+      .from("briefs")
+      .update({ status: "generating", started_at: new Date().toISOString() })
+      .eq("id", job.id)
+      .eq("status", "queued")
+      .select("id, input_url, profile_id");
+
+    if (!claimed?.length) return; // another worker claimed it
+
     await runPipeline(claimed[0].input_url, claimed[0].profile_id, claimed[0].id);
   } catch (err) {
     logError(`[pipeline error] ${err.message}`);
+  } finally {
+    isProcessing = false;
   }
-  isProcessing = false;
 
   // Immediately check for more work instead of waiting for next interval
-  pollForWork();
+  setTimeout(pollForWork, 0);
 }
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, async () => {
   log(`Worker listening on port ${PORT} (env: ${APP_ENV})`);
   await recoverStaleJobs();
-  setInterval(pollForWork, 5000);
+  setInterval(pollForWork, POLL_INTERVAL_MS);
   pollForWork(); // check immediately on boot
 });

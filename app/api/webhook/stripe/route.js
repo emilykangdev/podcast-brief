@@ -1,6 +1,6 @@
 import configFile from "@/config";
 import { findCheckoutSession } from "@/libs/stripe";
-import { createClient } from "@supabase/supabase-js";
+import supabase from "@/libs/supabase/admin";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -27,16 +27,6 @@ export async function POST(req) {
   let eventType;
   let event;
 
-  // Create a private Supabase client using the server-only secret key
-  // Disable realtime to reduce Edge Runtime warnings
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SECRET_KEY,
-    {
-      auth: { persistSession: false },
-      realtime: { disabled: true },
-    }
-  );
 
   // verify Stripe event is legit
   try {

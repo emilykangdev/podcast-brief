@@ -1,6 +1,4 @@
 // Onboarding page — first-time users submit an Apple Podcasts URL to generate their first brief.
-"use client";
-
 import config from "@/config";
 import BriefRequestForm from "@/components/BriefRequestForm";
 
