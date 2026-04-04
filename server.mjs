@@ -4,14 +4,14 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { writeFileSync } from "fs";
 import { mkdir, rm } from "fs/promises";
-import supabase from "./libs/supabase/admin.js";
+import supabase from "./libs/supabase/admin.mjs";
 import { run as transcribe } from "./scripts/transcribe.mjs";
 import { run as generateBrief } from "./scripts/generate-brief.mjs";
 import { run as enrichReferences } from "./scripts/enrich-references.mjs";
 import { run as validateReferences } from "./scripts/validate-references.mjs";
 import { run as mergeReferences } from "./scripts/merge-references.mjs";
 import { briefHasAllSections, briefHasReferences } from "./scripts/validate_pipeline.mjs";
-import { cleanUrl } from "./libs/url.js";
+import { cleanUrl } from "./libs/url.mjs";
 
 const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
 const STALE_JOB_TIMEOUT_MS = 20 * 60 * 1000;

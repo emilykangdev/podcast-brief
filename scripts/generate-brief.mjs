@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { join, dirname } from "path";
 import { randomUUID } from "crypto";
-import supabase from "../libs/supabase/admin.js";
+import supabase from "../libs/supabase/admin.mjs";
 
 // Exit codes:
 // 0 — success

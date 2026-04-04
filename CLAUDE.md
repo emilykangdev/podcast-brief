@@ -12,7 +12,7 @@ Complete implementation plans live in `tmp/done-plans/`. When working on a new p
 
 ## Conventions
 
-- **URL env vars:** Always use `cleanUrl("VAR_NAME")` from `libs/url.js` when building fetch URLs. Never use raw `process.env.SOME_URL` in a template literal.
+- **URL env vars:** Always use `cleanUrl("VAR_NAME")` from `libs/url.mjs` when building fetch URLs. Never use raw `process.env.SOME_URL` in a template literal.
 - **Client API calls:** Use `apiClient` from `libs/api.js` for all frontend fetch calls. Never use raw `fetch()` in client components — `apiClient` provides automatic 401 redirect, toast errors, and centralized response handling.
 - **Brief status lifecycle:** `queued → generating → complete`. A brief must always reach `complete`. Failed briefs get `error_log` populated.
 - **Single worker constraint:** Browserbase free tier allows 1 concurrent session. Jobs are processed one at a time via Supabase polling, not an in-memory queue.

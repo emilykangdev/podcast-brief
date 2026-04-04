@@ -2,7 +2,7 @@
 // Episode URL (?i=): transcribes exact episode. Show URL: transcribes latest episode.
 
 import { DeepgramClient } from "@deepgram/sdk";
-import supabase from "../libs/supabase/admin.js";
+import supabase from "../libs/supabase/admin.mjs";
 import { v5 as uuidv5 } from "uuid";
 import Parser from "rss-parser";
 import fs from "fs";
