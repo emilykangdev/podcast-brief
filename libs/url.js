@@ -1,5 +1,5 @@
 export function cleanUrl(envVar) {
   const url = process.env[envVar];
-  if (!url) return "";
+  if (!url) throw new Error(`Missing required env var: ${envVar}`);
   return url.replace(/\/+$/, "");
 }

@@ -3,14 +3,16 @@ import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 import { mkdir, rm } from "fs/promises";
-import { createClient } from "@supabase/supabase-js";
+import supabase from "./libs/supabase/admin.js";
 import { run as transcribe } from "./scripts/transcribe.mjs";
-import { run as generateBrief, BriefExistsError } from "./scripts/generate-brief.mjs";
+import { run as generateBrief } from "./scripts/generate-brief.mjs";
 import { run as enrichReferences } from "./scripts/enrich-references.mjs";
 import { run as validateReferences } from "./scripts/validate-references.mjs";
 import { run as mergeReferences } from "./scripts/merge-references.mjs";
 import { briefHasAllSections, briefHasReferences } from "./scripts/validate_pipeline.mjs";
 import { cleanUrl } from "./libs/url.js";
+
+const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 function log(...args) {
@@ -31,43 +33,35 @@ const RETRY_PROMPTS = {
     "Ensure the brief includes all required sections (SUMMARY, IDEAS, INSIGHTS, QUOTES, HABITS, FACTS, REFERENCES, ONE-SENTENCE TAKEAWAY, RECOMMENDATIONS) with substantive content in each.",
 };
 
-// Supabase client at module scope — fails fast at boot if env vars missing
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SECRET_KEY
-);
-
 const app = express();
 app.use(express.json());
 
 // Health check — must be before auth middleware so Railway can reach it unauthenticated
 app.get("/status", async (req, res) => {
-  const { data, error } = await supabase
+  const { data: generating, error } = await supabase
     .from("briefs")
     .select("id, input_url, created_at")
     .eq("status", "generating")
+    .eq("environment", APP_ENV)
     .order("created_at", { ascending: true });
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json({ activeJobs: data.length, jobs: data });
-});
 
-// Auth — reject any request without the shared secret
-app.use((req, res, next) => {
-  if (req.headers.authorization !== `Bearer ${process.env.WORKER_SECRET}`) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
-});
+  const { data: queued, error: queuedError } = await supabase
+    .from("briefs")
+    .select("id, input_url, created_at")
+    .eq("status", "queued")
+    .eq("environment", APP_ENV)
+    .order("created_at", { ascending: true });
 
-app.post("/jobs/brief", (req, res) => {
-  const { episodeUrl, profileId } = req.body;
-  if (!episodeUrl || !profileId) {
-    return res.status(400).json({ error: "episodeUrl and profileId required" });
-  }
-  res.json({ status: "queued" });
-  // Fire and forget — errors logged but don't crash the server
-  runPipeline(episodeUrl, profileId).catch((err) => logError(`[pipeline error] ${err.message}`));
+  if (queuedError) return res.status(500).json({ error: queuedError.message });
+
+  res.json({
+    activeJobs: generating.length,
+    queuedJobs: queued.length,
+    jobs: generating,
+    queued,
+  });
 });
 
 // Closes out a brief row regardless of outcome. Pass output_markdown + references on success;
@@ -112,19 +106,21 @@ async function generateBriefWithValidation({
   transcriptId,
   transcriptPath,
   profileId,
+  briefId,
   outputDir,
   errorLog,
 }) {
-  let { briefId, outputPath, outputMd } = await generateBrief({
+  let { outputPath, outputMd } = await generateBrief({
     transcriptId,
     transcriptPath,
     profileId,
+    briefId,
     outputDir,
   });
 
   const sectionsCheck = briefHasAllSections(outputMd);
   const refsCheck = briefHasReferences(outputMd);
-  if (sectionsCheck.valid && refsCheck.valid) return { briefId, outputPath, outputMd };
+  if (sectionsCheck.valid && refsCheck.valid) return { outputPath, outputMd };
 
   const reasons = [sectionsCheck, refsCheck].filter((c) => !c.valid).map((c) => c.reason);
   const promptAddition = !refsCheck.valid
@@ -133,10 +129,11 @@ async function generateBriefWithValidation({
   errorLog.push({ step: "validate-output", attempt: 1, reasons });
   logError(`[retry] Brief validation failed: ${reasons.join("; ")} — retrying generateBrief`);
 
-  ({ briefId, outputPath, outputMd } = await generateBrief({
+  ({ outputPath, outputMd } = await generateBrief({
     transcriptId,
     transcriptPath,
     profileId,
+    briefId,
     force: true,
     promptAddition,
     outputDir,
@@ -150,31 +147,26 @@ async function generateBriefWithValidation({
     writeFileSync(outputPath, outputMd, "utf-8");
   }
 
-  return { briefId, outputPath, outputMd };
+  return { outputPath, outputMd };
 }
 
-async function runPipeline(episodeUrl, profileId) {
+async function runPipeline(episodeUrl, profileId, briefId) {
   const jobId = randomUUID();
   const jobDir = path.join(os.tmpdir(), `podcast-brief-${jobId}`);
   await mkdir(jobDir, { recursive: true });
   const errorLog = [];
 
-  let briefId = null;
   try {
     const { episodeId, transcriptPath } = await transcribe(episodeUrl, { outputDir: jobDir });
 
-    const {
-      briefId: bid,
-      outputPath,
-      outputMd,
-    } = await generateBriefWithValidation({
+    const { outputPath, outputMd } = await generateBriefWithValidation({
       transcriptId: episodeId,
       transcriptPath,
       profileId,
+      briefId,
       outputDir: jobDir,
       errorLog,
     });
-    briefId = bid;
 
     const { referencesJsonPath } = await enrichReferences(outputPath, { outputDir: jobDir });
 
@@ -213,11 +205,9 @@ async function runPipeline(episodeUrl, profileId) {
     logError(`[pipeline error] ${err.message}`);
     errorLog.push({ step: "unrecoverable", error: err.message, stack: err.stack });
 
-    if (briefId) {
-      await completeBrief(briefId, { errorLog }).catch((e) =>
-        logError("[cleanup] Failed to update brief status:", e.message)
-      );
-    }
+    await completeBrief(briefId, { errorLog }).catch((e) =>
+      logError("[cleanup] Failed to update brief status:", e.message)
+    );
     await alertDeveloper({ briefId, jobId, error: err.message, episodeUrl, context: errorLog });
   } finally {
     await rm(jobDir, { recursive: true, force: true }).catch((e) =>
@@ -226,5 +216,63 @@ async function runPipeline(episodeUrl, profileId) {
   }
 }
 
+// ── Supabase polling ──────────────────────────────────────────────────────────
+
+async function recoverStaleJobs() {
+  const { data, error } = await supabase
+    .from("briefs")
+    .update({ status: "queued", started_at: null })
+    .eq("status", "generating")
+    .eq("environment", APP_ENV)
+    .lt("started_at", new Date(Date.now() - 20 * 60 * 1000).toISOString())
+    .select("id");
+  if (error) logError(`[recovery] Error recovering stale jobs: ${error.message}`);
+  if (data?.length) log(`[recovery] Reset ${data.length} stale generating job(s) to queued`);
+}
+
+let isProcessing = false;
+
+async function pollForWork() {
+  if (isProcessing) return;
+
+  // Find oldest queued job for this environment
+  const { data: jobs } = await supabase
+    .from("briefs")
+    .select("id, input_url, profile_id")
+    .eq("status", "queued")
+    .eq("environment", APP_ENV)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (!jobs?.length) return;
+  const job = jobs[0];
+
+  // Atomic claim
+  const { data: claimed } = await supabase
+    .from("briefs")
+    .update({ status: "generating", started_at: new Date().toISOString() })
+    .eq("id", job.id)
+    .eq("status", "queued")
+    .select("id, input_url, profile_id");
+
+  if (!claimed?.length) return; // another worker claimed it
+
+  isProcessing = true;
+  try {
+    await runPipeline(claimed[0].input_url, claimed[0].profile_id, claimed[0].id);
+  } catch (err) {
+    logError(`[pipeline error] ${err.message}`);
+  }
+  isProcessing = false;
+
+  // Immediately check for more work instead of waiting for next interval
+  pollForWork();
+}
+
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => log(`Worker listening on port ${PORT}`));
+app.listen(PORT, async () => {
+  log(`Worker listening on port ${PORT} (env: ${APP_ENV})`);
+  await recoverStaleJobs();
+  setInterval(pollForWork, 5000);
+  pollForWork(); // check immediately on boot
+});
