@@ -10,6 +10,7 @@ import { run as enrichReferences } from "./scripts/enrich-references.mjs";
 import { run as validateReferences } from "./scripts/validate-references.mjs";
 import { run as mergeReferences } from "./scripts/merge-references.mjs";
 import { briefHasAllSections, briefHasReferences } from "./scripts/validate_pipeline.mjs";
+import { cleanUrl } from "./libs/url.js";
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 function log(...args) {
@@ -90,7 +91,7 @@ async function completeBrief(
 // Sends a webhook alert to the developer on pipeline failure or degradation.
 async function alertDeveloper({ briefId, jobId, error, episodeUrl, context }) {
   if (!process.env.WEBHOOK_URL) return;
-  await fetch(process.env.WEBHOOK_URL, {
+  await fetch(cleanUrl("WEBHOOK_URL"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

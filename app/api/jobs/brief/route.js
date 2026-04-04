@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/libs/supabase/server";
+import { cleanUrl } from "@/libs/url";
 
 export async function POST(req) {
   try {
@@ -19,7 +20,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const workerUrl = `${process.env.WORKER_URL}/jobs/brief`;
+    const workerUrl = `${cleanUrl("WORKER_URL")}/jobs/brief`;
     console.log("Calling worker:", workerUrl);
 
     // Proxy to Railway worker — WORKER_SECRET never sent to browser

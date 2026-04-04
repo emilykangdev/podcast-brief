@@ -3,33 +3,21 @@
 "use client";
 
 import { useState } from "react";
+import apiClient from "@/libs/api";
 
 export default function BriefRequestForm() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState(null);
 
   async function handleSubmit() {
     setLoading(true);
-    setError(null);
 
     try {
-      const res = await fetch("/api/jobs/brief", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ episodeUrl: url }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Something went wrong. Please try again.");
-        return;
-      }
-
+      await apiClient.post("/jobs/brief", { episodeUrl: url });
       setSubmitted(true);
     } catch {
-      setError("Something went wrong. Please try again.");
+      // apiClient interceptor already shows toast + handles 401 redirect
     } finally {
       setLoading(false);
     }
@@ -60,7 +48,6 @@ export default function BriefRequestForm() {
       >
         {loading ? "Generating..." : "Generate Brief"}
       </button>
-      {error && <p className="text-error text-sm">{error}</p>}
     </div>
   );
 }

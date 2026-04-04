@@ -57,7 +57,27 @@ Two approaches were considered:
 - Keep `export const dynamic = "force-dynamic"` and `ButtonAccount`
 - Import and render `BriefRequestForm`
 
-### Step 3: Test on Vercel preview
+### Step 3: Fix URL sanitization
+
+#### Problem
+`WORKER_URL` set with a trailing slash (`https://...railway.app/`) caused double slashes in the fetch URL (`https://...railway.app//jobs/brief`), which Express doesn't match — returning 404. Same risk exists for `WEBHOOK_URL`.
+
+#### Fix
+- **New file:** `libs/url.js` — exports `cleanUrl(envVarName)` which reads the env var and strips trailing slashes
+- **Modified:** `app/api/jobs/brief/route.js` — uses `cleanUrl("WORKER_URL")` instead of raw `process.env.WORKER_URL`
+- **Modified:** `server.mjs` — uses `cleanUrl("WEBHOOK_URL")` instead of raw `process.env.WEBHOOK_URL`
+
+Any future URL env var used to build fetch URLs should use `cleanUrl()` to prevent this class of bug.
+
+### Step 4: Fix Railway networking port mismatch
+
+#### Problem
+Railway's public networking was routing to port 3000, but the server listens on port 8080 (injected via `PORT` env var). All external requests got `"Application failed to respond"` (502).
+
+#### Fix
+Changed Railway public networking port from 3000 to 8080 in the Railway dashboard (Settings → Networking → Public Networking).
+
+### Step 5: Test on Vercel preview
 
 - Push this branch, wait for Vercel preview deployment
 - Sign in via magic link on the preview URL
