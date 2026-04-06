@@ -1,17 +1,12 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { join, dirname } from "path";
-import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
+import supabase from "../libs/supabase/admin.mjs";
 
 // Exit codes:
 // 0 — success
 // 1 — general error (missing args, missing files, API failure, etc.)
-// 2 — brief already exists for this (profile_id, input_url) — HTTP wrapper maps to 409
-
-export class BriefExistsError extends Error {}
-
-// A "generating" row older than this is assumed to be from a crashed run and will be replaced.
-const STALE_GENERATING_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ── callOpenRouter ────────────────────────────────────────────────────────────
 async function callOpenRouter(system, user, { maxTokens = 16000 } = {}) {
@@ -101,32 +96,12 @@ IMPORTANT: The output should feel like it came from one coherent pass over the f
   return callOpenRouter(MERGE_SYSTEM, userContent, { maxTokens: 16000 });
 }
 
-// Throws BriefExistsError if a non-stale brief already exists.
-// Deletes stale or force-replaced rows so the caller can insert a fresh one.
-async function resolveExistingBrief(existing, { force, supabase }) {
-  if (!existing) return;
-  if (force) {
-    console.error(`--force: deleting existing ${existing.status} row and regenerating...`);
-    await supabase.from("briefs").delete().eq("id", existing.id);
-    return;
-  }
-  if (existing.status === "complete") {
-    throw new BriefExistsError("Brief already exists (complete) — skipping generation");
-  }
-  // status === "generating" — check if stale (older than STALE_GENERATING_TIMEOUT_MS = crashed run)
-  const ageMs = Date.now() - new Date(existing.updated_at).getTime();
-  if (ageMs < STALE_GENERATING_TIMEOUT_MS) {
-    throw new BriefExistsError("Brief is currently generating — try again shortly");
-  }
-  console.error("Stale generating row found (crashed run) — retrying...");
-  await supabase.from("briefs").delete().eq("id", existing.id);
-}
-
 // ── main export ───────────────────────────────────────────────────────────────
 export async function run({
   transcriptId,
   transcriptPath,
   profileId,
+  briefId,
   force = false,
   promptAddition = null,
   outputDir,
@@ -139,7 +114,7 @@ export async function run({
   }
 
   // ── env checks
-  for (const key of ["OPENROUTER_API_KEY", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SECRET_KEY"]) {
+  for (const key of ["OPENROUTER_API_KEY"]) {
     if (!process.env[key]) {
       throw new Error(`Missing required env var: ${key}`);
     }
@@ -149,6 +124,7 @@ export async function run({
   if (!transcriptId || !transcriptPath || !profileId) {
     throw new Error("transcriptId, transcriptPath, and profileId are required");
   }
+  if (!briefId) throw new Error("briefId is required");
   if (!transcriptPath.endsWith(".md")) {
     throw new Error("Error: transcript must be a .md file");
   }
@@ -166,33 +142,7 @@ export async function run({
   // ── load transcript
   const transcript = readFileSync(transcriptPath, "utf-8");
 
-  // ── client
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SECRET_KEY
-  );
-
   console.error("Generating brief...");
-
-  // 409 check — if a complete or in-progress brief already exists, do not generate
-  // Frontend should catch this first via direct Supabase query, but backend is authoritative
-  const { data: existing } = await supabase
-    .from("briefs")
-    .select("id, status, updated_at")
-    .eq("input_url", transcriptId)
-    .eq("profile_id", profileId)
-    .in("status", ["complete", "generating"])
-    .maybeSingle();
-  await resolveExistingBrief(existing, { force, supabase });
-
-  // insert generating row before API calls so crashes leave a visible row
-  const { data: briefRow, error: insertError } = await supabase
-    .from("briefs")
-    .insert({ profile_id: profileId, input_url: transcriptId, status: "generating" })
-    .select("id")
-    .single();
-  if (insertError) throw new Error(`Supabase insert failed: ${insertError.message}`);
-  const briefId = briefRow.id;
 
   const chunks = chunkTranscript(transcript);
   if (chunks.length > 1) console.error(`  → ${chunks.length} chunks`);
@@ -211,7 +161,9 @@ export async function run({
   writeFileSync(outputPath, disclaimer + brief, "utf-8");
   console.error(`✓ Brief written to ${outputPath}`);
 
-  // update brief row
+  // update brief row — crash insurance: persist output_markdown while status stays 'generating'
+  // server.mjs is responsible for transitioning status to 'complete' via completeBrief().
+  // When called from CLI (briefId is a UUID placeholder), this UPDATE is a no-op.
   console.error("  Saving to Supabase...");
   const { error: updateError } = await supabase
     .from("briefs")
@@ -224,6 +176,9 @@ export async function run({
 }
 
 // ── CLI shim ──────────────────────────────────────────────────────────────────
+// NOTE: briefId is required when called from the server (the API route creates the row first).
+// For direct CLI usage, a UUID placeholder is generated — the UPDATE above will be a no-op
+// since no row with that ID exists.
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
@@ -236,8 +191,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     );
     process.exit(1);
   }
-  run({ transcriptId, transcriptPath, profileId, force }).catch((err) => {
+  const briefId = randomUUID();
+  run({ transcriptId, transcriptPath, profileId, briefId, force }).catch((err) => {
     console.error(err.message);
-    process.exit(err instanceof BriefExistsError ? 2 : 1);
+    process.exit(1);
   });
 }

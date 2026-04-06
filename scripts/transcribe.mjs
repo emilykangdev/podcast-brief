@@ -2,7 +2,7 @@
 // Episode URL (?i=): transcribes exact episode. Show URL: transcribes latest episode.
 
 import { DeepgramClient } from "@deepgram/sdk";
-import { createClient as createSupabase } from "@supabase/supabase-js";
+import supabase from "../libs/supabase/admin.mjs";
 import { v5 as uuidv5 } from "uuid";
 import Parser from "rss-parser";
 import fs from "fs";
@@ -147,10 +147,6 @@ export async function run(appleUrl, { outputDir } = {}) {
     throw new Error(`Missing env vars: ${missingEnv.join(", ")}`);
   }
 
-  const supabase = createSupabase(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SECRET_KEY
-  );
   const deepgram = new DeepgramClient({ apiKey: process.env.DEEPGRAM_API_KEY });
 
   const episode = await resolveEpisode(appleUrl);
