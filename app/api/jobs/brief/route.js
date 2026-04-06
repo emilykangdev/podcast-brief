@@ -1,9 +1,72 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/libs/supabase/server";
 
+// Resets a completed brief back to queued for re-processing.
+// Each brief can only be regenerated once (enforced atomically via regeneration_count).
+async function handleRegenerate(supabase, user, episodeUrl) {
+  // Block if a brief for this episode is already in progress
+  const { data: inProgress } = await supabase
+    .from("briefs")
+    .select("id")
+    .eq("input_url", episodeUrl)
+    .eq("profile_id", user.id)
+    .in("status", ["queued", "generating"])
+    .maybeSingle();
+
+  if (inProgress) {
+    return NextResponse.json(
+      { error: "A brief for this episode is already being generated" },
+      { status: 409 }
+    );
+  }
+
+  // Find the completed brief
+  const { data: completedBrief } = await supabase
+    .from("briefs")
+    .select("id")
+    .eq("input_url", episodeUrl)
+    .eq("profile_id", user.id)
+    .eq("status", "complete")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!completedBrief) {
+    return NextResponse.json({ error: "No completed brief found to regenerate" }, { status: 404 });
+  }
+
+  // Atomic reset — WHERE includes regeneration_count = 0 so only the first
+  // request wins (prevents TOCTOU race if user double-clicks).
+  const { data: updated, error: updateError } = await supabase
+    .from("briefs")
+    .update({
+      status: "queued",
+      output_markdown: null,
+      references: null,
+      error_log: null,
+      started_at: null,
+      completed_at: null,
+      regeneration_count: 1,
+    })
+    .eq("id", completedBrief.id)
+    .eq("regeneration_count", 0)
+    .select("id");
+
+  if (updateError) {
+    console.error("Failed to queue regeneration:", updateError.message);
+    return NextResponse.json({ error: "Failed to queue regeneration" }, { status: 500 });
+  }
+
+  if (!updated?.length) {
+    return NextResponse.json({ error: "This brief has already been regenerated" }, { status: 409 });
+  }
+
+  return NextResponse.json({ status: "queued", briefId: completedBrief.id });
+}
+
 export async function POST(req) {
   try {
-    const { episodeUrl } = await req.json();
+    const { episodeUrl, regenerate } = await req.json();
     if (!episodeUrl) {
       return NextResponse.json({ error: "episodeUrl required" }, { status: 400 });
     }
@@ -16,6 +79,10 @@ export async function POST(req) {
     if (error || !user) {
       console.error("Auth failed:", error?.message ?? "no user");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (regenerate) {
+      return handleRegenerate(supabase, user, episodeUrl);
     }
 
     // Dedup check: reject if a brief for this episode is already in progress

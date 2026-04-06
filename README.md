@@ -58,10 +58,28 @@ User checks dashboard / receives email (email TBD)
 | `references` | jsonb | `complete` | Validated reference links. `NULL` if reference enrichment failed or was skipped. |
 | `error_log` | jsonb | `complete` (if degraded) | `NULL` on clean runs. Populated with structured error context when the pipeline retried, partially failed, or hit an unrecoverable error. Query degraded briefs: `SELECT * FROM briefs WHERE error_log IS NOT NULL`. |
 | `environment` | text | `queued` | `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Set from `APP_ENV` env var at submission time. Workers filter all queries by this column to prevent cross-contamination. One Supabase project, one table, isolated by environment. |
+| `podcast_name` | text | `generating` | Podcast name from Apple iTunes API. Written by the worker after the transcribe step. Used for dashboard display and zip folder names. |
+| `episode_title` | text | `generating` | Episode title from Apple iTunes API. Written by the worker after the transcribe step. Used for dashboard display and zip filenames. |
+| `regeneration_count` | integer | `queued` (on regen) | Default 0. Set to 1 when the user triggers a regeneration. Each brief gets one free regen — the button disappears after. |
 
 **Enum `brief_status`:** `('pending', 'queued', 'generating', 'complete', 'error')`. Only `queued`, `generating`, and `complete` are used. `pending` and `error` are legacy/unused.
 
 **Dedup rule:** At submission, block if a row with the same `input_url` + `profile_id` exists with `status='queued'` or `status='generating'` (return 409). Allow resubmission if the existing row is `complete`.
+
+**Regeneration:** Users can regenerate a completed brief once for free. The API route resets the existing row to `queued` (atomic `UPDATE WHERE regeneration_count = 0`), clears output fields, and the worker re-runs the full pipeline on the same row. No new row is created.
+
+## Dashboard
+
+The dashboard (`/dashboard`) is a server component that fetches briefs from Supabase and passes them to a client component (`DashboardClient`).
+
+**Features:**
+- **Brief list** — cards showing episode title, podcast name, status badge, and date. Newest first. In-progress briefs are muted (opacity-50) with "Queued" or "Generating" badges.
+- **Auto-polling** — refreshes every 60s while any brief is in-progress. Stops when all are complete.
+- **Brief modal** — click a card to view the full brief rendered as markdown. Includes copy-to-clipboard (raw markdown) and regenerate button.
+- **Download All** — zips all completed briefs as `.md` files organized into folders by podcast name. Client-side via JSZip.
+- **Episode metadata hydration** — old briefs missing `podcast_name`/`episode_title` are hydrated via the Apple iTunes API on first dashboard load, then persisted to Supabase so the API is never called again for that brief.
+
+**New dependencies:** `react-markdown`, `remark-gfm`, `jszip`, `@tailwindcss/typography`
 
 ## Pipeline Steps (server.mjs)
 
@@ -128,6 +146,88 @@ node --env-file=.env.local scripts/validate-references.mjs <references.json>
 # 5. Merge references (combine validated links into brief)
 node --env-file=.env.local scripts/merge-references.mjs <brief-output.md> <validated-references.md>
 ```
+
+## Error Handling: End-to-End
+
+Every brief always reaches `status='complete'`. There is no `error` status. The `error_log` column (jsonb, nullable) is the single source of truth for what went wrong.
+
+### What `error_log` means
+
+| `error_log` | `output_markdown` | What happened | Dashboard badge |
+|---|---|---|---|
+| `null` | has content | Clean success. LLM nailed it first try, references validated. | Green "Complete" |
+| has entries | has content | Degraded success. Pipeline retried or patched something, but still produced a usable brief. | Yellow "Issues" |
+| has entries | `null` | Hard failure. Pipeline crashed before producing any output (e.g., Deepgram timeout, LLM error). | Yellow "Issues" |
+
+### Pipeline error flow (step by step)
+
+```
+1. TRANSCRIBE (Deepgram)
+   ✓ → continue to step 2
+   ✗ → catch block: completeBrief(briefId, { errorLog })
+        output_markdown stays null (never written)
+        error_log: [{ step: "unrecoverable", error: "..." }]
+
+2. GENERATE BRIEF (OpenRouter LLM)
+   ✓ → validate output (briefHasAllSections + briefHasReferences)
+   ✗ → catch block: same as above
+
+   2a. VALIDATE OUTPUT
+       All sections present + has references → continue to step 3
+       Missing sections or 0 references →
+         errorLog.push({ step: "validate-output", attempt: 1 })
+         RETRY once with targeted prompt addition
+         Still failing after retry →
+           errorLog.push({ step: "validate-output", attempt: 2 })
+           Patch "## REFERENCES\nNo references found." into markdown
+           Continue to step 3 (degraded)
+
+   Note: output_markdown is written to Supabase mid-pipeline here
+   (crash insurance — if steps 3-5 fail, user still gets a brief
+   without validated reference links)
+
+3. ENRICH REFERENCES (Exa search)
+   ✓ → returns referencesJsonPath (candidates per reference)
+   ✗ or null → skip steps 4-5, complete with unmerged brief
+
+4. VALIDATE REFERENCES (Browserbase)
+   ✓ → returns validated URLs
+   ✗ → skip step 5, complete with unmerged brief
+
+5. MERGE REFERENCES
+   ✓ → final brief with validated links
+   ✗ → catch block: complete with whatever output exists
+```
+
+### Cost per episode (worst case)
+
+| Call | Credits | When |
+|------|---------|------|
+| User submits episode | 1 credit | Always |
+| Worker internal retry (validation failure) | 0 credits | Only if LLM output fails validation (missing sections or 0 references). Max 1 retry. |
+| User clicks regenerate | 0 credits | Optional. One free regen per brief. Entire pipeline re-runs. |
+
+Worst case: 3 LLM calls (original + 1 internal retry + 1 user regen) for 1 credit. The internal retry is invisible to the user.
+
+### `error_log` structure
+
+The `error_log` column is a jsonb array. Each entry has a `step` field and context-specific fields:
+
+```jsonc
+// Validation retry (degraded but recovered)
+{ "step": "validate-output", "attempt": 1, "reasons": ["Missing sections: REFERENCES"] }
+{ "step": "validate-output", "attempt": 2, "reason": "No references found in REFERENCES section" }
+
+// Unrecoverable crash
+{ "step": "unrecoverable", "error": "Deepgram API timeout", "stack": "..." }
+```
+
+### Key invariants
+
+- **A brief never stays stuck.** The catch block in `runPipeline()` always calls `completeBrief()`. On worker crash, startup recovery resets stale `generating` rows back to `queued`.
+- **`output_markdown` can exist while `status='generating'`.** Written mid-pipeline as crash insurance. The dashboard shows it with a "Generating" badge.
+- **0 references = yellow badge.** If the LLM surfaces no references after 1 retry, the brief is completed with a "No references found" placeholder and `error_log` populated. This is treated as a pipeline quality issue, not a valid result.
+- **`completeBrief()` only overwrites non-null fields.** On the error path, `output_markdown` is not passed, so whatever was written mid-pipeline (or null if transcribe crashed) is preserved.
 
 ## Plans
 
