@@ -43,7 +43,7 @@ app.use(express.json());
 app.get("/status", async (req, res) => {
   const { data: generating, error } = await supabase
     .from("briefs")
-    .select("id, input_url, created_at")
+    .select("id, created_at")
     .eq("status", "generating")
     .eq("environment", APP_ENV)
     .order("created_at", { ascending: true });
@@ -52,7 +52,7 @@ app.get("/status", async (req, res) => {
 
   const { data: queued, error: queuedError } = await supabase
     .from("briefs")
-    .select("id, input_url, created_at")
+    .select("id, created_at")
     .eq("status", "queued")
     .eq("environment", APP_ENV)
     .order("created_at", { ascending: true });
@@ -73,7 +73,7 @@ async function completeBrief(
   briefId,
   { outputMarkdown = null, references = null, errorLog = null } = {}
 ) {
-  await supabase
+  const { error } = await supabase
     .from("briefs")
     .update({
       status: "complete",
@@ -83,6 +83,10 @@ async function completeBrief(
       ...(errorLog !== null && { error_log: errorLog }),
     })
     .eq("id", briefId);
+
+  if (error) {
+    logError(`Failed to complete brief ${briefId}:`, error.message);
+  }
 }
 
 // Sends a webhook alert to the developer on pipeline failure or degradation.

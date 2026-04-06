@@ -1,5 +1,5 @@
 // Client component — lets users submit an Apple Podcasts URL to kick off brief generation.
-// Calls /api/jobs/brief (server-side proxy to Railway worker) and shows inline status.
+// Calls /api/jobs/brief to queue a brief in Supabase and shows inline status.
 "use client";
 
 import { useState } from "react";
@@ -33,7 +33,7 @@ export default function BriefRequestForm() {
   }
 
   return (
-    <div className="space-y-4">
+    <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-4">
       <input
         type="url"
         value={url}
@@ -42,12 +42,12 @@ export default function BriefRequestForm() {
         className="input input-bordered w-full"
       />
       <button
+        type="submit"
         className="btn btn-primary btn-block"
-        onClick={handleSubmit}
         disabled={loading || !url.trim()}
       >
         {loading ? "Generating..." : "Generate Brief"}
       </button>
-    </div>
+    </form>
   );
 }

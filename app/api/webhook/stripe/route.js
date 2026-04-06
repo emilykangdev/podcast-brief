@@ -1,6 +1,6 @@
 import configFile from "@/config";
 import { findCheckoutSession } from "@/libs/stripe";
-import supabase from "@/libs/supabase/admin";
+import supabase from "@/libs/supabase/admin.mjs";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";

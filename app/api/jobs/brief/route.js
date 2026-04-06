@@ -46,6 +46,13 @@ export async function POST(req) {
       .single();
 
     if (insertError) {
+      // Unique partial index catches the race condition the SELECT check can't
+      if (insertError.code === "23505") {
+        return NextResponse.json(
+          { error: "A brief for this episode is already in progress" },
+          { status: 409 }
+        );
+      }
       console.error("Failed to insert brief:", insertError.message);
       return NextResponse.json({ error: "Failed to queue brief" }, { status: 500 });
     }
