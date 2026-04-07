@@ -163,7 +163,13 @@ async function runPipeline(episodeUrl, profileId, briefId) {
   const errorLog = [];
 
   try {
-    const { episodeId, transcriptPath } = await transcribe(episodeUrl, { outputDir: jobDir });
+    const { episodeId, transcriptPath, podcastName, episodeTitle } = await transcribe(episodeUrl, { outputDir: jobDir });
+
+    const { error: metaError } = await supabase
+      .from("briefs")
+      .update({ podcast_name: podcastName, episode_title: episodeTitle })
+      .eq("id", briefId);
+    if (metaError) logError(`[metadata] Failed to save episode metadata for brief ${briefId}:`, metaError.message);
 
     const { outputPath, outputMd } = await generateBriefWithValidation({
       transcriptId: episodeId,
@@ -276,10 +282,17 @@ async function pollForWork() {
   setTimeout(pollForWork, 0);
 }
 
+// Run stale job recovery every 5 minutes — not just on boot.
+// Railway blue-green deploys can kill the old container mid-pipeline, leaving
+// briefs stuck at "generating". The startup recovery misses them if they're
+// too fresh (<20min). Periodic recovery catches them on the next pass.
+const RECOVERY_INTERVAL_MS = 5 * 60 * 1000;
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, async () => {
   log(`Worker listening on port ${PORT} (env: ${APP_ENV})`);
   await recoverStaleJobs();
+  setInterval(recoverStaleJobs, RECOVERY_INTERVAL_MS);
   setInterval(pollForWork, POLL_INTERVAL_MS);
   pollForWork(); // check immediately on boot
 });
