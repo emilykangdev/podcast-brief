@@ -77,7 +77,6 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 - **Auto-polling** — refreshes every 60s while any brief is in-progress. Stops when all are complete.
 - **Brief modal** — click a card to view the full brief rendered as markdown. Includes copy-to-clipboard (raw markdown) and regenerate button.
 - **Download All** — zips all completed briefs as `.md` files organized into folders by podcast name. Client-side via JSZip.
-- **Episode metadata hydration** — old briefs missing `podcast_name`/`episode_title` are hydrated via the Apple iTunes API on first dashboard load, then persisted to Supabase so the API is never called again for that brief.
 
 **New dependencies:** `react-markdown`, `remark-gfm`, `jszip`, `@tailwindcss/typography`
 

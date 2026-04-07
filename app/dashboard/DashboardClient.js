@@ -16,6 +16,7 @@ export default function DashboardClient({ briefs }) {
 
   const hasInProgress = briefs.some(b => b.status === "queued" || b.status === "generating");
 
+  // Poll every 60s while any brief is in-progress
   useEffect(() => {
     if (!hasInProgress) return;
     const id = setInterval(() => router.refresh(), 60_000);

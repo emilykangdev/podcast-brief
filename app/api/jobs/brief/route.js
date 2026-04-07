@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/libs/supabase/server";
 
+const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
+
 // Resets a completed brief back to queued for re-processing.
 // Each brief can only be regenerated once (enforced atomically via regeneration_count).
 async function handleRegenerate(supabase, user, episodeUrl) {
@@ -10,6 +12,7 @@ async function handleRegenerate(supabase, user, episodeUrl) {
     .select("id")
     .eq("input_url", episodeUrl)
     .eq("profile_id", user.id)
+    .eq("environment", APP_ENV)
     .in("status", ["queued", "generating"])
     .maybeSingle();
 
@@ -26,6 +29,7 @@ async function handleRegenerate(supabase, user, episodeUrl) {
     .select("id")
     .eq("input_url", episodeUrl)
     .eq("profile_id", user.id)
+    .eq("environment", APP_ENV)
     .eq("status", "complete")
     .order("created_at", { ascending: false })
     .limit(1)
@@ -91,6 +95,7 @@ export async function POST(req) {
       .select("id")
       .eq("input_url", episodeUrl)
       .eq("profile_id", user.id)
+      .eq("environment", APP_ENV)
       .in("status", ["queued", "generating"])
       .maybeSingle();
 
