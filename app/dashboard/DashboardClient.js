@@ -57,6 +57,7 @@ export default function DashboardClient({ briefs }) {
       setIsModalOpen(false);
       setSelectedBrief(null);
       router.refresh();
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
       // apiClient interceptor handles toast errors
     }

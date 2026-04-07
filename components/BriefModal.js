@@ -8,6 +8,7 @@ import Modal from "@/components/Modal";
 export default function BriefModal({ brief, isOpen, onClose, onRegenerate }) {
   const [copied, setCopied] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   async function handleCopy() {
     await navigator.clipboard.writeText(brief.output_markdown);
@@ -60,9 +61,10 @@ export default function BriefModal({ brief, isOpen, onClose, onRegenerate }) {
           <div className="flex gap-2 mt-3">
             <button
               className="btn btn-sm btn-warning"
-              onClick={() => { setShowConfirm(false); onRegenerate(brief); }}
+              disabled={regenerating}
+              onClick={() => { setRegenerating(true); onRegenerate(brief); }}
             >
-              Yes, regenerate
+              {regenerating ? "Regenerating..." : "Yes, regenerate"}
             </button>
             <button
               className="btn btn-sm btn-ghost"
