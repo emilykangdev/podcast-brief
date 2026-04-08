@@ -13,7 +13,7 @@ export default async function Dashboard() {
     .select("id, input_url, output_markdown, status, podcast_name, episode_title, created_at, completed_at, regeneration_count, error_log")
     .eq("profile_id", user.id)
     .eq("environment", process.env.APP_ENV || "DEVELOPMENT")
-    .order("created_at", { ascending: false });
+    .order("updated_at", { ascending: false });
 
   return (
     <main className="min-h-screen p-8 pb-24">

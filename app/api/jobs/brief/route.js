@@ -6,7 +6,9 @@ const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
 // Resets a completed brief back to queued for re-processing.
 // Each brief can only be regenerated once (enforced atomically via regeneration_count).
 async function handleRegenerate(supabase, user, episodeUrl) {
-  // Block if a brief for this episode is already in progress
+  // Only block queued/generating — not complete. The new-brief path blocks ALL statuses
+  // (including complete) to prevent duplicates. But regeneration needs a completed brief
+  // to exist — it just can't be already re-queued or re-generating.
   const { data: inProgress } = await supabase
     .from("briefs")
     .select("id")
@@ -90,21 +92,21 @@ export async function POST(req) {
       return handleRegenerate(supabase, user, episodeUrl);
     }
 
-    // Dedup check: reject if a brief for this episode is already in progress
+    // Dedup check: reject if a brief for this episode already exists (any status)
     const { data: existing } = await supabase
       .from("briefs")
-      .select("id")
+      .select("id, status")
       .eq("input_url", episodeUrl)
       .eq("profile_id", user.id)
       .eq("environment", APP_ENV)
-      .in("status", ["queued", "generating"])
+      .limit(1)
       .maybeSingle();
 
     if (existing) {
-      return NextResponse.json(
-        { error: "A brief for this episode is already in progress" },
-        { status: 409 }
-      );
+      const message = existing.status === "complete"
+        ? "You already have a brief for this episode"
+        : "A brief for this episode is already in progress";
+      return NextResponse.json({ error: message }, { status: 409 });
     }
 
     const { data: brief, error: insertError } = await supabase

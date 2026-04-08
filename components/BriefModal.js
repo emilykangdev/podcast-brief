@@ -24,8 +24,8 @@ export default function BriefModal({ brief, isOpen, onClose, onRegenerate }) {
 
       {brief.status === "generating" && <div className="badge badge-warning mt-2">Generating...</div>}
       {brief.status === "queued" && <div className="badge badge-info mt-2">Queued</div>}
-      {brief.status === "complete" && brief.error_log?.some(e => e.step === "unrecoverable") && (
-        <div className="badge badge-warning mt-2">Incomplete — some steps failed</div>
+      {brief.status === "complete" && !brief.output_markdown && (
+        <div className="badge badge-error mt-2">Failed</div>
       )}
 
       {brief.output_markdown ? (

@@ -118,7 +118,7 @@ function BriefCard({ brief, onClick }) {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <StatusBadge status={brief.status} errorLog={brief.error_log} />
+          <StatusBadge status={brief.status} hasContent={!!brief.output_markdown} />
           <span className="text-sm text-base-content/40">
             {new Date(brief.created_at).toLocaleDateString()}
           </span>
@@ -128,15 +128,14 @@ function BriefCard({ brief, onClick }) {
   );
 }
 
-function StatusBadge({ status, errorLog }) {
+function StatusBadge({ status, hasContent }) {
   if (status === "generating") return <span className="badge badge-sm badge-warning">Generating</span>;
   if (status === "queued") return <span className="badge badge-sm badge-info">Queued</span>;
   if (status !== "complete") return null;
 
-  // "unrecoverable" means something actually broke (Deepgram timeout, Browserbase 429, etc.)
-  // "validate-output" means the LLM retried but recovered — brief is fine.
-  const hasUnrecoverable = errorLog?.some(e => e.step === "unrecoverable");
-  if (hasUnrecoverable) return <span className="badge badge-sm badge-warning">Incomplete</span>;
+  // Badge is based on whether the user has a readable brief, not internal pipeline errors.
+  // error_log is for developer diagnostics (check Supabase), not user-facing status.
+  if (!hasContent) return <span className="badge badge-sm badge-error">Failed</span>;
   return <span className="badge badge-sm badge-success">Complete</span>;
 }
 
