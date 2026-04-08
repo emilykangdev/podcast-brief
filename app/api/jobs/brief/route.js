@@ -1,9 +1,79 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/libs/supabase/server";
 
+const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
+
+// Resets a completed brief back to queued for re-processing.
+// Each brief can only be regenerated once (enforced atomically via regeneration_count).
+async function handleRegenerate(supabase, user, episodeUrl) {
+  // Only block queued/generating — not complete. The new-brief path blocks ALL statuses
+  // (including complete) to prevent duplicates. But regeneration needs a completed brief
+  // to exist — it just can't be already re-queued or re-generating.
+  const { data: inProgress } = await supabase
+    .from("briefs")
+    .select("id")
+    .eq("input_url", episodeUrl)
+    .eq("profile_id", user.id)
+    .eq("environment", APP_ENV)
+    .in("status", ["queued", "generating"])
+    .maybeSingle();
+
+  if (inProgress) {
+    return NextResponse.json(
+      { error: "A brief for this episode is already being generated" },
+      { status: 409 }
+    );
+  }
+
+  // Find the completed brief
+  const { data: completedBrief } = await supabase
+    .from("briefs")
+    .select("id")
+    .eq("input_url", episodeUrl)
+    .eq("profile_id", user.id)
+    .eq("environment", APP_ENV)
+    .eq("status", "complete")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!completedBrief) {
+    return NextResponse.json({ error: "No completed brief found to regenerate" }, { status: 404 });
+  }
+
+  // Atomic reset — WHERE includes regeneration_count = 0 so only the first
+  // request wins (prevents TOCTOU race if user double-clicks).
+  // Keep output_markdown — if the new pipeline fails, the user still has their
+  // original brief. The worker overwrites it on success anyway.
+  const { data: updated, error: updateError } = await supabase
+    .from("briefs")
+    .update({
+      status: "queued",
+      references: null,
+      error_log: null,
+      started_at: null,
+      completed_at: null,
+      regeneration_count: 1,
+    })
+    .eq("id", completedBrief.id)
+    .eq("regeneration_count", 0)
+    .select("id");
+
+  if (updateError) {
+    console.error("Failed to queue regeneration:", updateError.message);
+    return NextResponse.json({ error: "Failed to queue regeneration" }, { status: 500 });
+  }
+
+  if (!updated?.length) {
+    return NextResponse.json({ error: "This brief has already been regenerated" }, { status: 409 });
+  }
+
+  return NextResponse.json({ status: "queued", briefId: completedBrief.id });
+}
+
 export async function POST(req) {
   try {
-    const { episodeUrl } = await req.json();
+    const { episodeUrl, regenerate } = await req.json();
     if (!episodeUrl) {
       return NextResponse.json({ error: "episodeUrl required" }, { status: 400 });
     }
@@ -18,20 +88,25 @@ export async function POST(req) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Dedup check: reject if a brief for this episode is already in progress
+    if (regenerate) {
+      return handleRegenerate(supabase, user, episodeUrl);
+    }
+
+    // Dedup check: reject if a brief for this episode already exists (any status)
     const { data: existing } = await supabase
       .from("briefs")
-      .select("id")
+      .select("id, status")
       .eq("input_url", episodeUrl)
       .eq("profile_id", user.id)
-      .in("status", ["queued", "generating"])
+      .eq("environment", APP_ENV)
+      .limit(1)
       .maybeSingle();
 
     if (existing) {
-      return NextResponse.json(
-        { error: "A brief for this episode is already in progress" },
-        { status: 409 }
-      );
+      const message = existing.status === "complete"
+        ? "You already have a brief for this episode"
+        : "A brief for this episode is already in progress";
+      return NextResponse.json({ error: message }, { status: 409 });
     }
 
     const { data: brief, error: insertError } = await supabase

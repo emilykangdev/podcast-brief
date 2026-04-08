@@ -230,13 +230,15 @@ async function runPipeline(episodeUrl, profileId, briefId) {
 
 // ── Supabase polling ──────────────────────────────────────────────────────────
 
+// Reset stale generating jobs back to queued. Does NOT filter on output_markdown —
+// a row with partial content that never got completeBrief()'d is still stuck.
+// Re-running the pipeline will overwrite the partial content with the full result.
 async function recoverStaleJobs() {
   let query = supabase
     .from("briefs")
     .update({ status: "queued", started_at: null })
     .eq("status", "generating")
     .eq("environment", APP_ENV)
-    .is("output_markdown", null)
     .lt("started_at", new Date(Date.now() - STALE_JOB_TIMEOUT_MS).toISOString());
   if (currentJobId) query = query.neq("id", currentJobId);
   const { data, error } = await query.select("id");

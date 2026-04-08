@@ -5,7 +5,7 @@
 import { useState } from "react";
 import apiClient from "@/libs/api";
 
-export default function BriefRequestForm() {
+export default function BriefRequestForm({ onSuccess }) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -15,7 +15,12 @@ export default function BriefRequestForm() {
 
     try {
       await apiClient.post("/jobs/brief", { episodeUrl: url });
-      setSubmitted(true);
+      if (onSuccess) {
+        setUrl("");
+        onSuccess();
+      } else {
+        setSubmitted(true);
+      }
     } catch {
       // apiClient interceptor already shows toast + handles 401 redirect
     } finally {

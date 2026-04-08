@@ -33,6 +33,49 @@ User checks dashboard / receives email (email TBD)
 - No shared secrets between Vercel and Railway
 - Supabase API requests are unlimited and free on all plans
 
+## Authentication Flow (Magic Link)
+
+Uses Supabase Auth with email OTP (magic links) + PKCE for secure code exchange.
+
+```
+1. User enters email on /signin, clicks "Send Magic Link"
+   │
+2. Browser: supabase.auth.signInWithOtp({ email, emailRedirectTo })
+   │  └─ Supabase JS client generates a PKCE code verifier
+   │     and stores it in a browser cookie (sb-<ref>-auth-token-code-verifier)
+   │
+3. Supabase server receives request
+   │  └─ Generates a one-time token
+   │  └─ Constructs verification URL:
+   │     https://<ref>.supabase.co/auth/v1/verify?token=<token>&type=magiclink&redirect_to=<emailRedirectTo>
+   │  └─ This URL is what {{ .ConfirmationURL }} resolves to in the email template
+   │
+4. Supabase sends email via Resend (configured email provider)
+   │  └─ New user → "Confirm Signup" template
+   │  └─ Existing user → "Magic Link" template
+   │  └─ Both use {{ .ConfirmationURL }}, both generate the same verification URL
+   │
+5. User clicks link in email
+   │  └─ Hits Supabase's /auth/v1/verify endpoint
+   │  └─ Supabase verifies the token
+   │  └─ Redirects to: <emailRedirectTo>?code=<auth_code>
+   │
+6. Browser arrives at /api/auth/callback?code=...
+   │  └─ exchangeCodeForSession(code) reads the PKCE code verifier
+   │     from the cookie set in step 2 and sends both to Supabase
+   │  └─ Supabase returns session tokens → cookies are set
+   │
+7. Callback checks if user has briefs
+   └─ No briefs → redirect to /onboarding
+   └─ Has briefs → redirect to /dashboard
+```
+
+**Email templates** are configured in the Supabase dashboard (Authentication → Email Templates), not in code.
+
+**PKCE cookie requirement**: The code verifier cookie from step 2 must be present when step 6 runs. If the user opens the magic link in a **different browser** or the cookie was cleared, `exchangeCodeForSession` silently fails — no session, user bounces back to sign-in. This is the #1 cause of magic link login failures.
+
+**Redirect URL allowlist**: `emailRedirectTo` must match a pattern in Supabase → Authentication → URL Configuration → Redirect URLs. If it doesn't match, Supabase silently falls back to the Site URL, which may be a different domain — causing a cookie domain mismatch.
+
 ## Brief Lifecycle
 
 | Status | Meaning |
@@ -58,10 +101,27 @@ User checks dashboard / receives email (email TBD)
 | `references` | jsonb | `complete` | Validated reference links. `NULL` if reference enrichment failed or was skipped. |
 | `error_log` | jsonb | `complete` (if degraded) | `NULL` on clean runs. Populated with structured error context when the pipeline retried, partially failed, or hit an unrecoverable error. Query degraded briefs: `SELECT * FROM briefs WHERE error_log IS NOT NULL`. |
 | `environment` | text | `queued` | `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Set from `APP_ENV` env var at submission time. Workers filter all queries by this column to prevent cross-contamination. One Supabase project, one table, isolated by environment. |
+| `podcast_name` | text | `generating` | Podcast name from Apple iTunes API. Written by the worker after the transcribe step. Used for dashboard display and zip folder names. |
+| `episode_title` | text | `generating` | Episode title from Apple iTunes API. Written by the worker after the transcribe step. Used for dashboard display and zip filenames. |
+| `regeneration_count` | integer | `queued` (on regen) | Default 0. Set to 1 when the user triggers a regeneration. Each brief gets one free regen — the button disappears after. |
 
 **Enum `brief_status`:** `('pending', 'queued', 'generating', 'complete', 'error')`. Only `queued`, `generating`, and `complete` are used. `pending` and `error` are legacy/unused.
 
-**Dedup rule:** At submission, block if a row with the same `input_url` + `profile_id` exists with `status='queued'` or `status='generating'` (return 409). Allow resubmission if the existing row is `complete`.
+**Dedup rule:** At submission, block if **any** row with the same `input_url` + `profile_id` + `environment` exists (return 409), regardless of status. Users who want a new run for a completed brief must use the regenerate button. The `handleRegenerate` path only blocks `queued`/`generating` (not `complete`) because it needs the completed row to exist in order to reset it.
+
+**Regeneration:** Users can regenerate a completed brief once for free. The API route resets the existing row to `queued` (atomic `UPDATE WHERE regeneration_count = 0`), clears output fields, and the worker re-runs the full pipeline on the same row. No new row is created.
+
+## Dashboard
+
+The dashboard (`/dashboard`) is a server component that fetches briefs from Supabase and passes them to a client component (`DashboardClient`).
+
+**Features:**
+- **Brief list** — cards showing episode title, podcast name, status badge, and date. Newest first. In-progress briefs are muted (opacity-50) with "Queued" or "Generating" badges.
+- **Auto-polling** — refreshes every 60s while any brief is in-progress. Stops when all are complete.
+- **Brief modal** — click a card to view the full brief rendered as markdown. Includes copy-to-clipboard (raw markdown) and regenerate button.
+- **Download All** — zips all completed briefs as `.md` files organized into folders by podcast name. Client-side via JSZip.
+
+**New dependencies:** `react-markdown`, `remark-gfm`, `jszip`, `@tailwindcss/typography`
 
 ## Pipeline Steps (server.mjs)
 
@@ -128,6 +188,100 @@ node --env-file=.env.local scripts/validate-references.mjs <references.json>
 # 5. Merge references (combine validated links into brief)
 node --env-file=.env.local scripts/merge-references.mjs <brief-output.md> <validated-references.md>
 ```
+
+## Error Handling: End-to-End
+
+Every brief always reaches `status='complete'`. There is no `error` status. The `error_log` column (jsonb, nullable) is the single source of truth for what went wrong.
+
+### Dashboard badge logic
+
+The badge is based on whether the user has a readable brief — not on internal pipeline errors.
+
+| `output_markdown` | `status` | Dashboard badge |
+|---|---|---|
+| has content | `complete` | Green **"Complete"** |
+| `null` | `complete` | Red **"Failed"** |
+| any | `generating` | Yellow **"Generating"** |
+| any | `queued` | Blue **"Queued"** |
+
+`error_log` is **developer-only** — check it in Supabase to diagnose pipeline issues. It is never shown to users. A brief with content is "Complete" even if the pipeline retried, reference validation failed, or Browserbase 429'd. The user has their brief; that's what matters.
+
+### What `error_log` means (developer reference)
+
+- **`step: "validate-output"`** — LLM retry. The LLM missed sections or references on the first try, the pipeline retried with a targeted prompt, and recovered. Normal pipeline behavior.
+- **`step: "unrecoverable"`** — Something actually broke. Deepgram timed out, Browserbase returned 429, LLM errored, etc. Check if the brief still has content — if yes, the user is unaffected.
+
+### Pipeline error flow (step by step)
+
+```
+1. TRANSCRIBE (Deepgram)
+   ✓ → continue to step 2
+   ✗ → catch block: completeBrief(briefId, { errorLog })
+        output_markdown stays null (never written)
+        error_log: [{ step: "unrecoverable", error: "..." }]
+
+2. GENERATE BRIEF (OpenRouter LLM)
+   ✓ → validate output (briefHasAllSections + briefHasReferences)
+   ✗ → catch block: same as above
+
+   2a. VALIDATE OUTPUT
+       All sections present + has references → continue to step 3
+       Missing sections or 0 references →
+         errorLog.push({ step: "validate-output", attempt: 1 })
+         RETRY once with targeted prompt addition
+         Still failing after retry →
+           errorLog.push({ step: "validate-output", attempt: 2 })
+           Patch "## REFERENCES\nNo references found." into markdown
+           Continue to step 3 (degraded)
+
+   Note: output_markdown is written to Supabase mid-pipeline here
+   (crash insurance — if steps 3-5 fail, user still gets a brief
+   without validated reference links)
+
+3. ENRICH REFERENCES (Exa search)
+   ✓ → returns referencesJsonPath (candidates per reference)
+   ✗ or null → skip steps 4-5, complete with unmerged brief
+
+4. VALIDATE REFERENCES (Browserbase)
+   ✓ → returns validated URLs
+   ✗ → skip step 5, complete with unmerged brief
+
+5. MERGE REFERENCES
+   ✓ → final brief with validated links
+   ✗ → catch block: complete with whatever output exists
+```
+
+### Cost per episode (worst case)
+
+| Call | Credits | When |
+|------|---------|------|
+| User submits episode | 1 credit | Always |
+| Worker internal retry (validation failure) | 0 credits | Only if LLM output fails validation (missing sections or 0 references). Max 1 retry. |
+| User clicks regenerate | 0 credits | Optional. One free regen per brief. Entire pipeline re-runs. |
+
+Worst case: 3 LLM calls (original + 1 internal retry + 1 user regen) for 1 credit. The internal retry is invisible to the user.
+
+### `error_log` structure
+
+The `error_log` column is a jsonb array. Each entry has a `step` field and context-specific fields:
+
+```jsonc
+// Validation retry (degraded but recovered)
+{ "step": "validate-output", "attempt": 1, "reasons": ["Missing sections: REFERENCES"] }
+{ "step": "validate-output", "attempt": 2, "reason": "No references found in REFERENCES section" }
+
+// Unrecoverable crash
+{ "step": "unrecoverable", "error": "Deepgram API timeout", "stack": "..." }
+```
+
+### Key invariants
+
+- **A brief never stays stuck.** The catch block in `runPipeline()` always calls `completeBrief()`. On worker crash, periodic recovery (every 5 min) resets `generating` rows older than `STALE_JOB_TIMEOUT_MS` (currently 20 min) back to `queued`.
+- **Stale job timeout must exceed max pipeline duration.** If a legit job takes longer than `STALE_JOB_TIMEOUT_MS` (20 min, `server.mjs:17`), recovery could reset it to `queued` while it's still running. This is safe: there's only one worker per environment, and `isProcessing` prevents it from picking up the re-queued row. When the original run finishes, `completeBrief` overwrites the status back to `complete`. No double processing. The 20-minute threshold has wide margin over the typical 2-5 minute pipeline. If long episodes (3h+) start hitting this, increase the timeout.
+- **`output_markdown` can exist while `status='generating'`.** Written mid-pipeline as crash insurance. The dashboard shows it with a "Generating" badge.
+- **Badge = has content, not error_log.** Green "Complete" if `output_markdown` exists, red "Failed" if null. `error_log` is developer-only (check Supabase). A brief with content is always "Complete" to the user, even if the pipeline had internal retries or Browserbase failures.
+- **Regeneration preserves old content.** The regeneration reset does NOT clear `output_markdown`. If the new pipeline fails, the user still has their original brief.
+- **`completeBrief()` only overwrites non-null fields.** On the error path, `output_markdown` is not passed, so whatever was written mid-pipeline (or the preserved original from regeneration) is kept.
 
 ## Plans
 
