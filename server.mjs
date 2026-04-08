@@ -231,18 +231,21 @@ async function runPipeline(episodeUrl, profileId, briefId) {
 // ── Supabase polling ──────────────────────────────────────────────────────────
 
 async function recoverStaleJobs() {
-  const { data, error } = await supabase
+  let query = supabase
     .from("briefs")
     .update({ status: "queued", started_at: null })
     .eq("status", "generating")
     .eq("environment", APP_ENV)
-    .lt("started_at", new Date(Date.now() - STALE_JOB_TIMEOUT_MS).toISOString())
-    .select("id");
+    .is("output_markdown", null)
+    .lt("started_at", new Date(Date.now() - STALE_JOB_TIMEOUT_MS).toISOString());
+  if (currentJobId) query = query.neq("id", currentJobId);
+  const { data, error } = await query.select("id");
   if (error) logError(`[recovery] Error recovering stale jobs: ${error.message}`);
   if (data?.length) log(`[recovery] Reset ${data.length} stale generating job(s) to queued`);
 }
 
 let isProcessing = false;
+let currentJobId = null;
 
 async function pollForWork() {
   if (isProcessing) return;
@@ -271,10 +274,12 @@ async function pollForWork() {
 
     if (!claimed?.length) return; // another worker claimed it
 
+    currentJobId = claimed[0].id;
     await runPipeline(claimed[0].input_url, claimed[0].profile_id, claimed[0].id);
   } catch (err) {
     logError(`[pipeline error] ${err.message}`);
   } finally {
+    currentJobId = null;
     isProcessing = false;
   }
 
