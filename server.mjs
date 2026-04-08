@@ -163,7 +163,13 @@ async function runPipeline(episodeUrl, profileId, briefId) {
   const errorLog = [];
 
   try {
-    const { episodeId, transcriptPath } = await transcribe(episodeUrl, { outputDir: jobDir });
+    const { episodeId, transcriptPath, podcastName, episodeTitle } = await transcribe(episodeUrl, { outputDir: jobDir });
+
+    const { error: metaError } = await supabase
+      .from("briefs")
+      .update({ podcast_name: podcastName, episode_title: episodeTitle })
+      .eq("id", briefId);
+    if (metaError) logError(`[metadata] Failed to save episode metadata for brief ${briefId}:`, metaError.message);
 
     const { outputPath, outputMd } = await generateBriefWithValidation({
       transcriptId: episodeId,
@@ -225,18 +231,21 @@ async function runPipeline(episodeUrl, profileId, briefId) {
 // ── Supabase polling ──────────────────────────────────────────────────────────
 
 async function recoverStaleJobs() {
-  const { data, error } = await supabase
+  let query = supabase
     .from("briefs")
     .update({ status: "queued", started_at: null })
     .eq("status", "generating")
     .eq("environment", APP_ENV)
-    .lt("started_at", new Date(Date.now() - STALE_JOB_TIMEOUT_MS).toISOString())
-    .select("id");
+    .is("output_markdown", null)
+    .lt("started_at", new Date(Date.now() - STALE_JOB_TIMEOUT_MS).toISOString());
+  if (currentJobId) query = query.neq("id", currentJobId);
+  const { data, error } = await query.select("id");
   if (error) logError(`[recovery] Error recovering stale jobs: ${error.message}`);
   if (data?.length) log(`[recovery] Reset ${data.length} stale generating job(s) to queued`);
 }
 
 let isProcessing = false;
+let currentJobId = null;
 
 async function pollForWork() {
   if (isProcessing) return;
@@ -265,10 +274,12 @@ async function pollForWork() {
 
     if (!claimed?.length) return; // another worker claimed it
 
+    currentJobId = claimed[0].id;
     await runPipeline(claimed[0].input_url, claimed[0].profile_id, claimed[0].id);
   } catch (err) {
     logError(`[pipeline error] ${err.message}`);
   } finally {
+    currentJobId = null;
     isProcessing = false;
   }
 
@@ -276,10 +287,17 @@ async function pollForWork() {
   setTimeout(pollForWork, 0);
 }
 
+// Run stale job recovery every 5 minutes — not just on boot.
+// Railway blue-green deploys can kill the old container mid-pipeline, leaving
+// briefs stuck at "generating". The startup recovery misses them if they're
+// too fresh (<20min). Periodic recovery catches them on the next pass.
+const RECOVERY_INTERVAL_MS = 5 * 60 * 1000;
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, async () => {
   log(`Worker listening on port ${PORT} (env: ${APP_ENV})`);
   await recoverStaleJobs();
+  setInterval(recoverStaleJobs, RECOVERY_INTERVAL_MS);
   setInterval(pollForWork, POLL_INTERVAL_MS);
   pollForWork(); // check immediately on boot
 });

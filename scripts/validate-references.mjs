@@ -45,9 +45,37 @@ function isSessionDead(reason) {
 }
 
 // ── Session management ────────────────────────────────────────────────────────
+const SESSION_CREATE_MAX_RETRIES = 3;
+const SESSION_CREATE_RETRY_DELAY_MS = 30_000;
+
 async function connectSession(bb) {
-  const session = await bb.sessions.create({ projectId: process.env.BROWSERBASE_PROJECT_ID });
-  return chromium.connectOverCDP(session.connectUrl);
+  // Retry session creation with backoff — Browserbase free tier allows 1 concurrent
+  // session, and the previous session's slot may not be released instantly even after
+  // browser.close() + REQUEST_RELEASE.
+  for (let attempt = 1; attempt <= SESSION_CREATE_MAX_RETRIES; attempt++) {
+    try {
+      const session = await bb.sessions.create({ projectId: process.env.BROWSERBASE_PROJECT_ID });
+      const browser = await chromium.connectOverCDP(session.connectUrl);
+      return { browser, sessionId: session.id };
+    } catch (err) {
+      const is429 = err.message?.includes("429") || err.status === 429;
+      if (!is429 || attempt === SESSION_CREATE_MAX_RETRIES) throw err;
+      console.error(`  ↺ Browserbase 429 (attempt ${attempt}/${SESSION_CREATE_MAX_RETRIES}), retrying in ${SESSION_CREATE_RETRY_DELAY_MS / 1000}s...`);
+      await new Promise((r) => setTimeout(r, SESSION_CREATE_RETRY_DELAY_MS));
+    }
+  }
+}
+
+// Explicitly release the Browserbase session slot so the next job can start immediately.
+// browser.close() only disconnects CDP — Browserbase may take seconds to mark it as ended.
+async function releaseSession(bb, browser, sessionId) {
+  await browser?.close().catch(() => {});
+  if (sessionId) {
+    await bb.sessions.update(sessionId, {
+      status: "REQUEST_RELEASE",
+      projectId: process.env.BROWSERBASE_PROJECT_ID,
+    }).catch((err) => console.error(`  ⚠ Failed to release session ${sessionId}: ${err.message}`));
+  }
 }
 
 // ── Per-URL validation with page-closed retry ─────────────────────────────────
@@ -163,7 +191,7 @@ export async function run(inputPath) {
 
   const bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY });
   const results = [];
-  let browser = await connectSession(bb);
+  let { browser, sessionId } = await connectSession(bb);
   let hasRetried = false;
   let startIndex = 0;
 
@@ -181,13 +209,13 @@ export async function run(inputPath) {
           });
         }
         hasRetried = true;
-        browser.close().catch(() => {});
-        browser = await connectSession(bb);
+        await releaseSession(bb, browser, sessionId);
+        ({ browser, sessionId } = await connectSession(bb));
         startIndex = results.length; // resume from the ref that was in-flight
       }
     }
   } finally {
-    await browser?.close();
+    await releaseSession(bb, browser, sessionId);
   }
 
   return writeResults(results, inputPath, podcastID);

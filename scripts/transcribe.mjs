@@ -176,6 +176,8 @@ export async function run(appleUrl, { outputDir } = {}) {
       episodeId: episode.episodeId,
       transcriptPath: path.join(outputDir, `${episode.episodeId}-transcript.md`),
       transcriptMd: cached.transcript_md,
+      podcastName: episode.podcastName,
+      episodeTitle: episode.title,
     };
   }
 
@@ -220,7 +222,7 @@ ${body}
   }
 
   const transcriptPath = saveMarkdown(episode.episodeId, md, outputDir);
-  return { episodeId: episode.episodeId, transcriptPath, transcriptMd: md };
+  return { episodeId: episode.episodeId, transcriptPath, transcriptMd: md, podcastName: episode.podcastName, episodeTitle: episode.title };
 }
 
 // ── CLI shim ──────────────────────────────────────────────────────
