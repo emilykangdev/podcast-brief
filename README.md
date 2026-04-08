@@ -152,11 +152,16 @@ Every brief always reaches `status='complete'`. There is no `error` status. The 
 
 ### What `error_log` means
 
-| `error_log` | `output_markdown` | What happened | Dashboard badge |
-|---|---|---|---|
-| `null` | has content | Clean success. LLM nailed it first try, references validated. | Green "Complete" |
-| has entries | has content | Degraded success. Pipeline retried or patched something, but still produced a usable brief. | Yellow "Issues" |
-| has entries | `null` | Hard failure. Pipeline crashed before producing any output (e.g., Deepgram timeout, LLM error). | Yellow "Issues" |
+The dashboard badge is determined by the `step` field inside `error_log` entries, not just whether `error_log` exists:
+
+- **`step: "validate-output"`** — LLM retry. The LLM missed sections or references on the first try, the pipeline retried with a targeted prompt, and recovered. The brief is complete and usable. This is normal pipeline behavior, not a user-facing issue.
+- **`step: "unrecoverable"`** — Something actually broke. Deepgram timed out, Browserbase returned 429, LLM errored, etc. The brief may be missing content or reference links.
+
+| `error_log` | What happened | Dashboard badge |
+|---|---|---|
+| `null` | Clean success. LLM nailed it first try, references validated. | Green **"Complete"** |
+| only `validate-output` entries | LLM retried but recovered. Brief is complete and usable. | Green **"Complete"** |
+| has `unrecoverable` entry | Something broke (Deepgram timeout, Browserbase 429, etc.). Brief may be incomplete. | Yellow **"Incomplete"** |
 
 ### Pipeline error flow (step by step)
 
@@ -223,10 +228,11 @@ The `error_log` column is a jsonb array. Each entry has a `step` field and conte
 
 ### Key invariants
 
-- **A brief never stays stuck.** The catch block in `runPipeline()` always calls `completeBrief()`. On worker crash, startup recovery resets stale `generating` rows back to `queued`.
+- **A brief never stays stuck.** The catch block in `runPipeline()` always calls `completeBrief()`. On worker crash, periodic recovery (every 5 min) resets stale `generating` rows back to `queued`.
 - **`output_markdown` can exist while `status='generating'`.** Written mid-pipeline as crash insurance. The dashboard shows it with a "Generating" badge.
-- **0 references = yellow badge.** If the LLM surfaces no references after 1 retry, the brief is completed with a "No references found" placeholder and `error_log` populated. This is treated as a pipeline quality issue, not a valid result.
-- **`completeBrief()` only overwrites non-null fields.** On the error path, `output_markdown` is not passed, so whatever was written mid-pipeline (or null if transcribe crashed) is preserved.
+- **0 references after retry = green badge.** The `validate-output` entries in `error_log` are internal retries, not user-facing issues. Only `unrecoverable` entries trigger the yellow "Incomplete" badge.
+- **Regeneration preserves old content.** The regeneration reset does NOT clear `output_markdown`. If the new pipeline fails, the user still has their original brief.
+- **`completeBrief()` only overwrites non-null fields.** On the error path, `output_markdown` is not passed, so whatever was written mid-pipeline (or the preserved original from regeneration) is kept.
 
 ## Plans
 

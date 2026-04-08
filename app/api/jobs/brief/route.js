@@ -41,11 +41,12 @@ async function handleRegenerate(supabase, user, episodeUrl) {
 
   // Atomic reset — WHERE includes regeneration_count = 0 so only the first
   // request wins (prevents TOCTOU race if user double-clicks).
+  // Keep output_markdown — if the new pipeline fails, the user still has their
+  // original brief. The worker overwrites it on success anyway.
   const { data: updated, error: updateError } = await supabase
     .from("briefs")
     .update({
       status: "queued",
-      output_markdown: null,
       references: null,
       error_log: null,
       started_at: null,
