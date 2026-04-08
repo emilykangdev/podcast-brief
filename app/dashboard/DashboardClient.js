@@ -14,7 +14,15 @@ export default function DashboardClient({ briefs }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  const hasInProgress = briefs.some(b => b.status === "queued" || b.status === "generating");
+  // Float in-progress briefs (queued/generating) to top so regenerated briefs are visible.
+  // Within each group, the server-side created_at DESC order is preserved.
+  const sortedBriefs = [...briefs].sort((a, b) => {
+    const aActive = a.status === "queued" || a.status === "generating" ? 0 : 1;
+    const bActive = b.status === "queued" || b.status === "generating" ? 0 : 1;
+    return aActive - bActive;
+  });
+
+  const hasInProgress = sortedBriefs.some(b => b.status === "queued" || b.status === "generating");
 
   // Poll every 60s while any brief is in-progress
   useEffect(() => {
@@ -78,13 +86,13 @@ export default function DashboardClient({ briefs }) {
         )}
       </div>
 
-      {briefs.length === 0 ? (
+      {sortedBriefs.length === 0 ? (
         <p className="text-base-content/50 text-center py-12">
           No briefs yet. Submit a podcast episode above to get started.
         </p>
       ) : (
         <div className="space-y-3">
-          {briefs.map(brief => (
+          {sortedBriefs.map(brief => (
             <BriefCard key={brief.id} brief={brief}
                        onClick={() => { setSelectedBrief(brief); setIsModalOpen(true); }} />
           ))}

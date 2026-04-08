@@ -107,7 +107,7 @@ Uses Supabase Auth with email OTP (magic links) + PKCE for secure code exchange.
 
 **Enum `brief_status`:** `('pending', 'queued', 'generating', 'complete', 'error')`. Only `queued`, `generating`, and `complete` are used. `pending` and `error` are legacy/unused.
 
-**Dedup rule:** At submission, block if a row with the same `input_url` + `profile_id` exists with `status='queued'` or `status='generating'` (return 409). Allow resubmission if the existing row is `complete`.
+**Dedup rule:** At submission, block if **any** row with the same `input_url` + `profile_id` + `environment` exists (return 409), regardless of status. Users who want a new run for a completed brief must use the regenerate button. The `handleRegenerate` path only blocks `queued`/`generating` (not `complete`) because it needs the completed row to exist in order to reset it.
 
 **Regeneration:** Users can regenerate a completed brief once for free. The API route resets the existing row to `queued` (atomic `UPDATE WHERE regeneration_count = 0`), clears output fields, and the worker re-runs the full pipeline on the same row. No new row is created.
 
