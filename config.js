@@ -20,7 +20,7 @@ const config = {
     plans: [
       {
         // TODO: replace with real Stripe priceId after creating in dashboard (test mode)
-        priceId: isProduction ? "price_PROD_5_CREDITS" : "price_TEST_5_CREDITS",
+        priceId: isProduction ? "price_PROD_5_CREDITS" : "prod_U6eTyIsHGeYjiZ",
         name: "5 Credits",
         credits: 5,
         description: "Try it out",
@@ -33,7 +33,7 @@ const config = {
       },
       {
         // TODO: replace with real Stripe priceId after creating in dashboard (test mode)
-        priceId: isProduction ? "price_PROD_15_CREDITS" : "price_TEST_15_CREDITS",
+        priceId: isProduction ? "price_PROD_15_CREDITS" : "prod_U6eT9lYVW02Fhe",
         name: "15 Credits",
         credits: 15,
         description: "The middle ground",
@@ -47,10 +47,10 @@ const config = {
       {
         isFeatured: true,
         // TODO: replace with real Stripe priceId after creating in dashboard (test mode)
-        priceId: isProduction ? "price_PROD_50_CREDITS" : "price_TEST_50_CREDITS",
+        priceId: isProduction ? "price_PROD_50_CREDITS" : "prod_UIowTOBsdIuY7r",
         name: "50 Credits",
         credits: 50,
-        description: "What serious listeners pick",
+        description: "What serious learners pick",
         price: 40,
         priceAnchor: "",
         features: [
