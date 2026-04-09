@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/libs/supabase/server";
 import adminSupabase from "@/libs/supabase/admin.mjs";
+import { MAX_EPISODE_SECONDS, creditsNeeded as calcCredits } from "@/libs/credits";
+import { verifyEstimate } from "@/libs/estimate-signer";
 
 const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
 
-// Resets a completed brief back to queued for re-processing.
-// Each brief can only be regenerated once (enforced atomically via regeneration_count).
-// TODO(Session 3): Replace this manual UPDATE with consume_credits_and_regenerate_brief() RPC
-// to add credit deduction (free within 24h, full price after). The RPC already exists in
-// the migration but isn't wired up yet because the credit flow depends on Sessions 2-3.
+// Regeneration: free within 24h of completion, full price after.
+// Pre-credit briefs (credits_charged=null) are always free to regen.
 async function handleRegenerate(db, user, episodeUrl) {
-  // Only block queued/generating — not complete. The new-brief path blocks ALL statuses
-  // (including complete) to prevent duplicates. But regeneration needs a completed brief
-  // to exist — it just can't be already re-queued or re-generating.
   const { data: inProgress } = await db
     .from("briefs")
     .select("id")
@@ -29,10 +25,9 @@ async function handleRegenerate(db, user, episodeUrl) {
     );
   }
 
-  // Find the completed brief
   const { data: completedBrief } = await db
     .from("briefs")
-    .select("id")
+    .select("id, credits_charged, completed_at")
     .eq("input_url", episodeUrl)
     .eq("profile_id", user.id)
     .eq("environment", APP_ENV)
@@ -45,102 +40,126 @@ async function handleRegenerate(db, user, episodeUrl) {
     return NextResponse.json({ error: "No completed brief found to regenerate" }, { status: 404 });
   }
 
-  // Atomic reset — WHERE includes regeneration_count = 0 so only the first
-  // request wins (prevents TOCTOU race if user double-clicks).
-  // Keep output_markdown — if the new pipeline fails, the user still has their
-  // original brief. The worker overwrites it on success anyway.
-  const { data: updated, error: updateError } = await db
-    .from("briefs")
-    .update({
-      status: "queued",
-      references: null,
-      error_log: null,
-      started_at: null,
-      completed_at: null,
-      regeneration_count: 1,
-    })
-    .eq("id", completedBrief.id)
-    .eq("regeneration_count", 0)
-    .select("id");
+  // Free within 24h of completion. If completed_at is null (shouldn't happen for
+  // status=complete, but guard against it), treat as outside the free window.
+  const isFreeWindow = completedBrief.completed_at
+    ? (Date.now() - new Date(completedBrief.completed_at).getTime()) / (1000 * 60 * 60) <= 24
+    : false;
+  const regenCost = isFreeWindow ? 0 : (completedBrief.credits_charged ?? 0);
 
-  if (updateError) {
-    console.error("Failed to queue regeneration:", updateError.message);
+  const { data: result, error: rpcError } = await db.rpc("consume_credits_and_regenerate_brief", {
+    p_profile_id: user.id,
+    p_brief_id: completedBrief.id,
+    p_credits_to_charge: regenCost,
+    p_environment: APP_ENV,
+  });
+
+  if (rpcError) {
+    console.error("RPC error:", rpcError);
+    return NextResponse.json({ error: "Failed to queue regeneration" }, { status: 500 });
+  }
+  if (result.error === "insufficient_credits") {
+    return NextResponse.json({
+      error: "insufficient_credits",
+      creditsRemaining: result.credits_remaining,
+      creditsNeeded: regenCost,
+    }, { status: 402 });
+  }
+  if (result.error === "already_regenerated") {
+    return NextResponse.json({ error: "This brief has already been regenerated" }, { status: 409 });
+  }
+  if (result.error) {
+    console.error("Unexpected regen RPC error:", result.error);
     return NextResponse.json({ error: "Failed to queue regeneration" }, { status: 500 });
   }
 
-  if (!updated?.length) {
-    return NextResponse.json({ error: "This brief has already been regenerated" }, { status: 409 });
-  }
-
-  return NextResponse.json({ status: "queued", briefId: completedBrief.id });
+  return NextResponse.json({
+    status: "queued",
+    briefId: completedBrief.id,
+    creditsCharged: result.credits_charged,
+    creditsRemaining: result.credits_remaining,
+  });
 }
 
 export async function POST(req) {
   try {
-    const { episodeUrl, regenerate } = await req.json();
+    const { episodeUrl, durationSeconds, regenerate, sig } = await req.json();
     if (!episodeUrl) {
       return NextResponse.json({ error: "episodeUrl required" }, { status: 400 });
     }
 
     const authSupabase = await createClient();
-    const {
-      data: { user },
-      error,
-    } = await authSupabase.auth.getUser();
+    const { data: { user }, error } = await authSupabase.auth.getUser();
     if (error || !user) {
       console.error("Auth failed:", error?.message ?? "no user");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // All privileged brief writes happen through the admin client after we bind
-    // every query/mutation to the authenticated user's id.
+    // Admin client for RPC calls (service_role only)
     const db = adminSupabase;
 
+    // Regen path FIRST — regen requests don't send durationSeconds
     if (regenerate) {
       return handleRegenerate(db, user, episodeUrl);
     }
 
-    // Dedup check: reject if a brief for this episode already exists (any status)
-    const { data: existing } = await db
-      .from("briefs")
-      .select("id, status")
-      .eq("input_url", episodeUrl)
-      .eq("profile_id", user.id)
-      .eq("environment", APP_ENV)
-      .limit(1)
-      .maybeSingle();
-
-    if (existing) {
-      const message = existing.status === "complete"
-        ? "You already have a brief for this episode"
-        : "A brief for this episode is already in progress";
-      return NextResponse.json({ error: message }, { status: 409 });
+    // New brief — validate durationSeconds server-side (defense in depth)
+    if (!Number.isInteger(durationSeconds) || durationSeconds <= 0 || durationSeconds > MAX_EPISODE_SECONDS) {
+      return NextResponse.json({ error: "Invalid or out-of-range episode duration" }, { status: 422 });
     }
 
-    const { data: brief, error: insertError } = await db
-      .from("briefs")
-      .insert({
-        profile_id: user.id,
-        input_url: episodeUrl,
-        status: "queued",
-        environment: APP_ENV,
-      })
-      .select("id")
-      .single();
+    // Verify the estimate signature — prevents clients from forging a low durationSeconds
+    // to pay fewer credits. The sig was produced by the estimate endpoint using HMAC.
+    if (!sig || !verifyEstimate(episodeUrl, durationSeconds, sig)) {
+      return NextResponse.json({
+        error: "Detected modification in duration info, please send a request again.",
+      }, { status: 422 });
+    }
 
-    if (insertError) {
-      // Unique partial index catches the race condition the SELECT check can't
-      if (insertError.code === "23505") {
+    const needed = calcCredits(durationSeconds);
+
+    // Atomic: dedup check + credit deduction + brief insert + ledger entry (all in one RPC)
+    const { data: result, error: rpcError } = await db.rpc("consume_credits_and_queue_brief", {
+      p_profile_id: user.id,
+      p_episode_url: episodeUrl,
+      p_duration_seconds: durationSeconds,
+      p_credits_to_charge: needed,
+      p_environment: APP_ENV,
+    });
+
+    if (rpcError) {
+      // 23505 = Postgres unique violation — partial index caught a race condition
+      if (rpcError.code === "23505") {
         return NextResponse.json(
           { error: "A brief for this episode is already in progress" },
           { status: 409 }
         );
       }
-      console.error("Failed to insert brief:", insertError.message);
+      console.error("RPC error:", rpcError);
       return NextResponse.json({ error: "Failed to queue brief" }, { status: 500 });
     }
 
-    return NextResponse.json({ status: "queued", briefId: brief.id });
+    if (result.error === "already_exists") {
+      return NextResponse.json({ error: "You already have a brief for this episode" }, { status: 409 });
+    }
+    if (result.error === "insufficient_credits") {
+      return NextResponse.json({
+        error: "insufficient_credits",
+        creditsRemaining: result.credits_remaining,
+        creditsNeeded: needed,
+      }, { status: 402 });
+    }
+    if (result.error) {
+      console.error("Unexpected RPC error:", result.error);
+      return NextResponse.json({ error: "Failed to queue brief" }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      status: "queued",
+      briefId: result.brief_id,
+      creditsCharged: result.credits_charged,
+      creditsRemaining: result.credits_remaining,
+    });
   } catch (e) {
     console.error("Unhandled error in /api/jobs/brief:", e);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

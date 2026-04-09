@@ -104,12 +104,65 @@ Uses Supabase Auth with email OTP (magic links) + PKCE for secure code exchange.
 | `podcast_name` | text | `generating` | Podcast name from Apple iTunes API. Written by the worker after the transcribe step. Used for dashboard display and zip folder names. |
 | `episode_title` | text | `generating` | Episode title from Apple iTunes API. Written by the worker after the transcribe step. Used for dashboard display and zip filenames. |
 | `regeneration_count` | integer | `queued` (on regen) | Default 0. Set to 1 when the user triggers a regeneration. Each brief gets one free regen — the button disappears after. |
+| `episode_duration_seconds` | integer | `queued` | Duration of the podcast episode in seconds. Set by the `consume_credits_and_queue_brief` RPC at submission time. Used to compute credit cost (1 credit per audio hour, rounded up). |
+| `credits_charged` | integer | `queued` | Number of credits deducted for this brief. Set by the RPC. `NULL` for pre-credit briefs (created before the credit system). Used by the regen cost calculation and dashboard display. |
 
 **Enum `brief_status`:** `('pending', 'queued', 'generating', 'complete', 'error')`. Only `queued`, `generating`, and `complete` are used. `pending` and `error` are legacy/unused.
 
 **Dedup rule:** At submission, block if **any** row with the same `input_url` + `profile_id` + `environment` exists (return 409), regardless of status. Users who want a new run for a completed brief must use the regenerate button. The `handleRegenerate` path only blocks `queued`/`generating` (not `complete`) because it needs the completed row to exist in order to reset it.
 
-**Regeneration:** Users can regenerate a completed brief once for free. The API route resets the existing row to `queued` (atomic `UPDATE WHERE regeneration_count = 0`), clears output fields, and the worker re-runs the full pipeline on the same row. No new row is created.
+**Regeneration:** Users can regenerate a completed brief once. Free within 24 hours of completion (quality guarantee); full price (same credits as original) after 24h. Pre-credit briefs (`credits_charged` NULL) are always free to regen. The `consume_credits_and_regenerate_brief` RPC handles credit deduction + atomic row reset in one transaction.
+
+## Credit System
+
+**1 credit = 1 hour of audio (rounded up).** A 30min episode costs 1 credit; a 2h15min episode costs 3.
+
+### Pricing tiers
+| Pack | Price | Per credit |
+|------|-------|------------|
+| 5 credits | $6 | $1.20 |
+| 15 credits | $15 | $1.00 |
+| 50 credits | $40 | $0.80 |
+
+New users get **3 free credits** on signup.
+
+### Brief submission flow (two-step with HMAC anti-tamper)
+```
+1. POST /api/jobs/brief/estimate { episodeUrl }
+   → resolves episode via iTunes API → gets durationSeconds
+   → creditsNeeded = Math.ceil(durationSeconds / 3600)
+   → checks: >4h cap? insufficient credits?
+   → signs HMAC(episodeUrl|durationSeconds) with STRIPE_SECRET_KEY
+   → returns { durationSeconds, creditsNeeded, creditsRemaining, episodeTitle, sig }
+
+2. POST /api/jobs/brief { episodeUrl, durationSeconds, sig }
+   → validates durationSeconds: integer, > 0, ≤ 4h
+   → verifies HMAC sig matches (episodeUrl + durationSeconds) — rejects if tampered
+   → calls consume_credits_and_queue_brief() Postgres RPC
+   → atomically: dedup check → credit check → deduct → insert brief → write ledger
+   → returns { briefId, creditsCharged, creditsRemaining }
+```
+
+**Why the signature?** Without it, a malicious client could skip the estimate endpoint and POST directly to `/api/jobs/brief` with `durationSeconds: 1` to pay only 1 credit for a 4-hour episode. The HMAC ties the `durationSeconds` value to the server's authoritative iTunes lookup. The secret key never leaves the server — the frontend just passes the `sig` back unchanged, like a receipt stamp. If the sig doesn't match, the request is rejected with 422.
+
+### Idempotent webhook crediting
+The Stripe webhook uses an **insert-first pattern**: it attempts to INSERT a `credit_ledger` row with the Stripe `event.id` as `stripe_event_id` (which has a unique partial index). If the insert succeeds, this is the first delivery → `increment_credits` RPC runs. If it fails with 23505 (duplicate), the event was already processed → skip. If `increment_credits` fails, the ledger row is rolled back and the webhook returns 503 so Stripe retries.
+
+### Cost per episode
+| Action | Credits | When |
+|--------|---------|------|
+| New brief | N credits (1 per audio hour, rounded up) | Always |
+| Regen within 24h | 0 credits | Quality guarantee |
+| Regen after 24h | N credits (same as original) | Full price |
+| Pre-credit brief regen | 0 credits | Always free |
+
+### 4-hour episode cap
+Episodes longer than 4 hours are rejected at the estimate endpoint with a friendly message. This stays within Deepgram's synchronous processing window. When demand for longer episodes appears, the async Deepgram callback plan can be shipped to raise the cap.
+
+## Checkout Routes
+
+- **`GET /checkout?priceId=xxx&mode=payment`** — Stripe Embedded Checkout form. Auth-guarded (redirects to `/signin` if not logged in). Renders Stripe's payment form inside an iframe on our domain. After payment, Stripe redirects to the return page.
+- **`GET /checkout/return?session_id=xxx`** — Post-payment status page. Auth-guarded. Verifies session ownership (`client_reference_id === user.id`). Shows success (with credits purchased), failure, or generic error. Links to dashboard.
 
 ## Dashboard
 
@@ -154,6 +207,9 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 ### Vercel (Next.js)
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — Supabase client (browser-safe)
 - `SUPABASE_SECRET_KEY` — Supabase admin/service-role client (server-only, never exposed to browser)
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` — Stripe publishable key (browser-safe, for embedded checkout form)
+- `STRIPE_SECRET_KEY` — Stripe secret key (server-only, for creating checkout sessions)
+- `STRIPE_WEBHOOK_SECRET` — Stripe webhook signing secret (server-only, for verifying webhook payloads)
 - `APP_ENV` — `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Written to `briefs.environment` at submission time.
 
 ### Railway (Worker)

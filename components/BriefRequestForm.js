@@ -1,58 +1,168 @@
-// Client component — lets users submit an Apple Podcasts URL to kick off brief generation.
-// Calls /api/jobs/brief to queue a brief in Supabase and shows inline status.
+// Two-step brief request: estimate (duration + cost preview) → confirm (atomic credit deduction).
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import apiClient from "@/libs/api";
+import config from "@/config";
+import { formatDuration } from "@/libs/credits";
 
 export default function BriefRequestForm({ onSuccess }) {
+  const router = useRouter();
   const [url, setUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [estimateResult, setEstimateResult] = useState(null);
+  const [estimateLoading, setEstimateLoading] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [inlineError, setInlineError] = useState(null);
+  const [showInsufficientModal, setShowInsufficientModal] = useState(false);
+  const [creditData, setCreditData] = useState(null);
 
-  async function handleSubmit() {
-    setLoading(true);
+  async function handleEstimate() {
+    setEstimateLoading(true);
+    setInlineError(null);
+    setEstimateResult(null);
 
     try {
-      await apiClient.post("/jobs/brief", { episodeUrl: url });
-      if (onSuccess) {
-        setUrl("");
-        onSuccess();
-      } else {
-        setSubmitted(true);
+      const data = await apiClient.post("/jobs/brief/estimate", { episodeUrl: url });
+      setEstimateResult(data);
+    } catch (err) {
+      if (err.creditData) {
+        // 402 — insufficient credits
+        setCreditData(err.creditData);
+        setShowInsufficientModal(true);
+      } else if (err.response?.status === 422) {
+        setInlineError(err.response.data.message || err.message);
       }
-    } catch {
-      // apiClient interceptor already shows toast + handles 401 redirect
+      // 401 handled by apiClient (redirect), other errors toasted by apiClient
     } finally {
-      setLoading(false);
+      setEstimateLoading(false);
     }
   }
 
-  if (submitted) {
-    return (
-      <p className="text-base-content/70">
-        Your brief is being generated — we&apos;ll let you know when it&apos;s
-        ready.
-      </p>
-    );
+  async function handleConfirm() {
+    setConfirmLoading(true);
+
+    try {
+      await apiClient.post("/jobs/brief", {
+        episodeUrl: url,
+        durationSeconds: estimateResult.durationSeconds,
+        sig: estimateResult.sig,
+      });
+      setUrl("");
+      setEstimateResult(null);
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      if (err.creditData) {
+        setCreditData(err.creditData);
+        setShowInsufficientModal(true);
+      }
+      // 409/other errors toasted by apiClient
+    } finally {
+      setConfirmLoading(false);
+    }
   }
 
+  function handleReset() {
+    setEstimateResult(null);
+    setInlineError(null);
+  }
+
+  // Sorted plans: 50-pack first (primary CTA), then 15, then 5
+  const sortedPlans = [...config.stripe.plans].sort((a, b) => b.credits - a.credits);
+
   return (
-    <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-4">
-      <input
-        type="url"
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        placeholder="https://podcasts.apple.com/..."
-        className="input input-bordered w-full"
-      />
-      <button
-        type="submit"
-        className="btn btn-primary btn-block"
-        disabled={loading || !url.trim()}
-      >
-        {loading ? "Generating..." : "Generate Brief"}
-      </button>
-    </form>
+    <>
+      <form onSubmit={(e) => { e.preventDefault(); estimateResult ? handleConfirm() : handleEstimate(); }} className="space-y-4">
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => { setUrl(e.target.value); if (estimateResult) handleReset(); }}
+          placeholder="https://podcasts.apple.com/..."
+          className="input input-bordered w-full"
+          disabled={confirmLoading}
+        />
+
+        {inlineError && (
+          <p className="text-error text-sm">{inlineError}</p>
+        )}
+
+        {estimateResult && (
+          <div className="bg-base-200 rounded-lg p-4 space-y-1">
+            <p className="font-semibold">{estimateResult.episodeTitle}</p>
+            <p className="text-sm text-base-content/60">
+              {formatDuration(estimateResult.durationSeconds)} &middot; {estimateResult.creditsNeeded} credit{estimateResult.creditsNeeded === 1 ? "" : "s"}
+            </p>
+            <p className="text-sm text-base-content/60">
+              You have {estimateResult.creditsRemaining} credit{estimateResult.creditsRemaining === 1 ? "" : "s"} remaining
+            </p>
+          </div>
+        )}
+
+        {estimateResult ? (
+          <button
+            type="submit"
+            className="btn btn-primary btn-block"
+            disabled={confirmLoading}
+          >
+            {confirmLoading ? "Generating..." : `Generate Brief (${estimateResult.creditsNeeded} credit${estimateResult.creditsNeeded === 1 ? "" : "s"})`}
+          </button>
+        ) : (
+          <button
+            type="submit"
+            className="btn btn-primary btn-block"
+            disabled={estimateLoading || !url.trim()}
+          >
+            {estimateLoading ? "Checking..." : "Check Episode"}
+          </button>
+        )}
+      </form>
+
+      {/* Insufficient credits modal */}
+      {showInsufficientModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-base-100 rounded-lg p-6 max-w-sm w-full mx-4 space-y-4">
+            <h3 className="font-bold text-lg">Not enough credits</h3>
+            <p className="text-sm text-base-content/70">
+              {creditData?.message || "You need more credits to generate this brief."}
+            </p>
+            <div className="space-y-2">
+              {sortedPlans.map((plan, i) => (
+                i === 0 ? (
+                  <button
+                    key={plan.priceId}
+                    className="btn btn-primary btn-block"
+                    onClick={() => router.push(`/checkout?priceId=${plan.priceId}&mode=payment`)}
+                  >
+                    {plan.credits} credits &mdash; ${plan.price}
+                  </button>
+                ) : i === 1 ? (
+                  <button
+                    key={plan.priceId}
+                    className="btn btn-outline btn-block"
+                    onClick={() => router.push(`/checkout?priceId=${plan.priceId}&mode=payment`)}
+                  >
+                    {plan.credits} credits &mdash; ${plan.price}
+                  </button>
+                ) : (
+                  <button
+                    key={plan.priceId}
+                    className="btn btn-ghost btn-sm btn-block"
+                    onClick={() => router.push(`/checkout?priceId=${plan.priceId}&mode=payment`)}
+                  >
+                    {plan.credits} credits &mdash; ${plan.price}
+                  </button>
+                )
+              ))}
+            </div>
+            <button
+              className="btn btn-ghost btn-sm btn-block"
+              onClick={() => setShowInsufficientModal(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

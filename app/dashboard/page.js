@@ -10,10 +10,16 @@ export default async function Dashboard() {
 
   const { data: briefs } = await supabase
     .from("briefs")
-    .select("id, input_url, output_markdown, status, podcast_name, episode_title, created_at, completed_at, regeneration_count, error_log")
+    .select("id, input_url, output_markdown, status, podcast_name, episode_title, created_at, completed_at, regeneration_count, error_log, credits_charged")
     .eq("profile_id", user.id)
     .eq("environment", process.env.APP_ENV || "DEVELOPMENT")
     .order("created_at", { ascending: false });
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("credits")
+    .eq("id", user.id)
+    .single();
 
   return (
     <main className="min-h-screen p-8 pb-24">
@@ -22,7 +28,7 @@ export default async function Dashboard() {
           <h1 className="text-3xl font-extrabold">Your Briefs</h1>
           <ButtonAccount />
         </div>
-        <DashboardClient briefs={briefs ?? []} />
+        <DashboardClient briefs={briefs ?? []} credits={profile?.credits ?? 0} />
       </section>
     </main>
   );

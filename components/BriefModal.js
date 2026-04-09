@@ -46,11 +46,21 @@ export default function BriefModal({ brief, isOpen, onClose, onRegenerate }) {
             {copied ? "Copied!" : "Copy Markdown"}
           </button>
         )}
-        {brief.status === "complete" && brief.regeneration_count === 0 && (
-          <button className="btn btn-sm btn-warning" onClick={() => setShowConfirm(true)}>
-            Regenerate
-          </button>
-        )}
+        {brief.status === "complete" && brief.regeneration_count === 0 && (() => {
+          const hoursSince = brief.completed_at
+            ? (Date.now() - new Date(brief.completed_at).getTime()) / 3_600_000
+            : null;
+          const isFree = hoursSince != null && hoursSince <= 24;
+          const regenCost = isFree ? 0 : (brief.credits_charged ?? 0);
+          const label = regenCost === 0
+            ? "Regenerate (free)"
+            : `Regenerate (${regenCost} credit${regenCost === 1 ? "" : "s"})`;
+          return (
+            <button className="btn btn-sm btn-warning" onClick={() => setShowConfirm(true)}>
+              {label}
+            </button>
+          );
+        })()}
       </div>
 
       {showConfirm && (

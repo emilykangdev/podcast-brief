@@ -7,8 +7,9 @@ import JSZip from "jszip";
 import apiClient from "@/libs/api";
 import BriefRequestForm from "@/components/BriefRequestForm";
 import BriefModal from "@/components/BriefModal";
+import CreditBalance from "@/components/CreditBalance";
 
-export default function DashboardClient({ briefs }) {
+export default function DashboardClient({ briefs, credits }) {
   const router = useRouter();
   const [selectedBrief, setSelectedBrief] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -66,13 +67,18 @@ export default function DashboardClient({ briefs }) {
       setSelectedBrief(null);
       router.refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch {
-      // apiClient interceptor handles toast errors
+    } catch (err) {
+      if (err.creditData) {
+        // 402 — insufficient credits for paid regen (>24h window)
+        toast.error(`Not enough credits. You need ${err.creditData.creditsNeeded} credit${err.creditData.creditsNeeded === 1 ? "" : "s"} but have ${err.creditData.creditsRemaining}.`);
+      }
+      // Other errors (409, 500) are toasted by apiClient interceptor
     }
   }
 
   return (
     <>
+      <CreditBalance credits={credits} />
       <BriefRequestForm onSuccess={() => router.refresh()} />
 
       <div className="flex justify-between items-center">
