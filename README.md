@@ -152,7 +152,8 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 ## Env Vars
 
 ### Vercel (Next.js)
-- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — Supabase client
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — Supabase client (browser-safe)
+- `SUPABASE_SECRET_KEY` — Supabase admin/service-role client (server-only, never exposed to browser)
 - `APP_ENV` — `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Written to `briefs.environment` at submission time.
 
 ### Railway (Worker)
@@ -162,7 +163,36 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 - `BROWSERBASE_API_KEY`, `BROWSERBASE_PROJECT_ID` — headless browser
 - `WEBHOOK_URL` — developer error alert endpoint (optional)
 
-Note: Vercel and Railway share no secrets. They communicate only through Supabase.
+Note: Vercel and Railway both use `SUPABASE_SECRET_KEY` but for different purposes — Vercel for API route credit RPCs, Railway for worker brief processing. They still communicate only through Supabase (no direct HTTP calls between them).
+
+## Supabase Client Pattern (Split-Client)
+
+API routes use two Supabase clients with distinct roles:
+
+| Client | Import | Purpose | Permissions |
+|--------|--------|---------|-------------|
+| `authSupabase` | `libs/supabase/server` | Cookie-backed. **Only** used for `auth.getUser()` to identify the caller. | User's own RLS scope |
+| `db` (admin) | `libs/supabase/admin.mjs` | Service-role. Used for all reads/writes after binding to `user.id`. | Bypasses RLS, can call service-role-only RPCs |
+
+**Why two clients?** Credit RPCs (`consume_credits_and_queue_brief`, `consume_credits_and_regenerate_brief`, `increment_credits`) are locked to `service_role` only — `REVOKE EXECUTE FROM PUBLIC, authenticated` in the migration. This prevents browser-side clients from calling them directly to bypass business rules (e.g., passing `p_credits_to_charge=0` for a paid brief). The API route validates inputs and enforces rules before calling the RPC through the admin client.
+
+### Why the admin client is safe in a Next.js app on Vercel
+
+The admin client uses `SUPABASE_SECRET_KEY` (the service-role key), which has full database access with no RLS restrictions. This sounds dangerous but is safe here because of how Next.js and Vercel work:
+
+1. **The key never reaches the browser.** `SUPABASE_SECRET_KEY` has no `NEXT_PUBLIC_` prefix. Vercel only bundles env vars prefixed with `NEXT_PUBLIC_` into client-side JavaScript. The secret key exists only in the Node.js serverless function process.
+2. **API routes are server-side only.** Files under `app/api/` run as serverless functions on Vercel's infrastructure, not in the browser. The admin client is imported and used exclusively in these server-side routes.
+3. **Every query is scoped to the authenticated user.** The admin client bypasses RLS, but every query includes `.eq("profile_id", user.id)` where `user.id` comes from the cookie-backed auth client. The elevated permissions don't mean "access all users" — they mean "access this user's data without RLS filtering overhead, and call service-role-only RPCs."
+4. **RPCs are locked down at the SQL level.** All credit RPCs have `REVOKE EXECUTE FROM PUBLIC, authenticated` — even if someone discovered the secret key, calling the RPCs through a browser Supabase client with the anon key would fail with "permission denied." Only the service-role key works.
+5. **The key was already on Vercel.** The webhook route (`app/api/webhook/stripe/route.js`) already imports `libs/supabase/admin.mjs` and has been deployed to Vercel since the initial Stripe integration. No new env var exposure.
+
+**Pattern in code** (see `app/api/jobs/brief/route.js`):
+```javascript
+const authSupabase = await createClient();          // cookie-backed
+const { data: { user } } = await authSupabase.auth.getUser();
+const db = adminSupabase;                           // service-role
+// All queries below use db.from("briefs").eq("profile_id", user.id)...
+```
 
 ## URL Env Var Convention
 

@@ -13,6 +13,8 @@
     "@browserbasehq/sdk": "^2.9.0",
     "@deepgram/sdk": "^5.0.0",
     "@headlessui/react": "^2.2.0",
+    "@stripe/react-stripe-js": "^6.1.0",
+    "@stripe/stripe-js": "^9.1.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.46.2",
     "@tailwindcss/typography": "^0.5.19",

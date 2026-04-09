@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/libs/supabase/server";
+import adminSupabase from "@/libs/supabase/admin.mjs";
 
 const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
 
 // Resets a completed brief back to queued for re-processing.
 // Each brief can only be regenerated once (enforced atomically via regeneration_count).
-async function handleRegenerate(supabase, user, episodeUrl) {
+// TODO(Session 3): Replace this manual UPDATE with consume_credits_and_regenerate_brief() RPC
+// to add credit deduction (free within 24h, full price after). The RPC already exists in
+// the migration but isn't wired up yet because the credit flow depends on Sessions 2-3.
+async function handleRegenerate(db, user, episodeUrl) {
   // Only block queued/generating — not complete. The new-brief path blocks ALL statuses
   // (including complete) to prevent duplicates. But regeneration needs a completed brief
   // to exist — it just can't be already re-queued or re-generating.
-  const { data: inProgress } = await supabase
+  const { data: inProgress } = await db
     .from("briefs")
     .select("id")
     .eq("input_url", episodeUrl)
@@ -26,7 +30,7 @@ async function handleRegenerate(supabase, user, episodeUrl) {
   }
 
   // Find the completed brief
-  const { data: completedBrief } = await supabase
+  const { data: completedBrief } = await db
     .from("briefs")
     .select("id")
     .eq("input_url", episodeUrl)
@@ -45,7 +49,7 @@ async function handleRegenerate(supabase, user, episodeUrl) {
   // request wins (prevents TOCTOU race if user double-clicks).
   // Keep output_markdown — if the new pipeline fails, the user still has their
   // original brief. The worker overwrites it on success anyway.
-  const { data: updated, error: updateError } = await supabase
+  const { data: updated, error: updateError } = await db
     .from("briefs")
     .update({
       status: "queued",
@@ -78,22 +82,26 @@ export async function POST(req) {
       return NextResponse.json({ error: "episodeUrl required" }, { status: 400 });
     }
 
-    const supabase = await createClient();
+    const authSupabase = await createClient();
     const {
       data: { user },
       error,
-    } = await supabase.auth.getUser();
+    } = await authSupabase.auth.getUser();
     if (error || !user) {
       console.error("Auth failed:", error?.message ?? "no user");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // All privileged brief writes happen through the admin client after we bind
+    // every query/mutation to the authenticated user's id.
+    const db = adminSupabase;
+
     if (regenerate) {
-      return handleRegenerate(supabase, user, episodeUrl);
+      return handleRegenerate(db, user, episodeUrl);
     }
 
     // Dedup check: reject if a brief for this episode already exists (any status)
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from("briefs")
       .select("id, status")
       .eq("input_url", episodeUrl)
@@ -109,13 +117,13 @@ export async function POST(req) {
       return NextResponse.json({ error: message }, { status: 409 });
     }
 
-    const { data: brief, error: insertError } = await supabase
+    const { data: brief, error: insertError } = await db
       .from("briefs")
       .insert({
         profile_id: user.id,
         input_url: episodeUrl,
         status: "queued",
-        environment: process.env.APP_ENV || "DEVELOPMENT",
+        environment: APP_ENV,
       })
       .select("id")
       .single();

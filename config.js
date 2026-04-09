@@ -1,3 +1,7 @@
+// APP_ENV, not NODE_ENV — staging runs NODE_ENV=production on Vercel,
+// so using NODE_ENV would send staging users to LIVE Stripe priceIds.
+const isProduction = process.env.APP_ENV === "PRODUCTION";
+
 const config = {
   // REQUIRED
   appName: "PodcastBrief",
@@ -13,41 +17,45 @@ const config = {
     onlyShowOnRoutes: ["/"],
   },
   stripe: {
-    // Create multiple plans in your Stripe dashboard, then add them here. You can add as many plans as you want, just make sure to add the priceId
     plans: [
       {
-        // REQUIRED — we use this to find the plan in the webhook (for instance if you want to update the user's credits based on the plan)
-        priceId:
-          process.env.NODE_ENV === "development" ? "price_1T8RAZGYah0xPaVcgjGKMXSE" : "price_456",
-        //  REQUIRED - Name of the plan, displayed on the pricing page
-        name: "3 Briefs",
-        // A friendly description of the plan, displayed on the pricing page. Tip: explain why this plan and not others
-        description: "Perfect for trying it out",
-        // The price you want to display, the one user will be charged on Stripe.
-        price: 5,
-        // If you have an anchor price (i.e. $29) that you want to display crossed out, put it here. Otherwise, leave it empty
+        // TODO: replace with real Stripe priceId after creating in dashboard (test mode)
+        priceId: isProduction ? "price_PROD_5_CREDITS" : "price_TEST_5_CREDITS",
+        name: "5 Credits",
+        credits: 5,
+        description: "Try it out",
+        price: 6,
         priceAnchor: "",
         features: [
-          {
-            name: "3 Briefs",
-          },
-          { name: "Sent to your email inbox" },
+          { name: "5 credits (~5 podcast hours)" },
+          { name: "$1.20 per podcast hour" },
         ],
       },
       {
-        // This plan will look different on the pricing page, it will be highlighted. You can only have one plan with isFeatured: true
-        isFeatured: true,
-        priceId:
-          process.env.NODE_ENV === "development" ? "price_1T8RArGYah0xPaVcTXSHB6QP" : "price_456",
-        name: "10 Briefs",
-        description: "You want more learning power",
-        price: 25,
+        // TODO: replace with real Stripe priceId after creating in dashboard (test mode)
+        priceId: isProduction ? "price_PROD_15_CREDITS" : "price_TEST_15_CREDITS",
+        name: "15 Credits",
+        credits: 15,
+        description: "The middle ground",
+        price: 15,
         priceAnchor: "",
         features: [
-          {
-            name: "10 Briefs",
-          },
-          { name: "Sent to your email inbox" },
+          { name: "15 credits (~15 podcast hours)" },
+          { name: "$1.00 per podcast hour" },
+        ],
+      },
+      {
+        isFeatured: true,
+        // TODO: replace with real Stripe priceId after creating in dashboard (test mode)
+        priceId: isProduction ? "price_PROD_50_CREDITS" : "price_TEST_50_CREDITS",
+        name: "50 Credits",
+        credits: 50,
+        description: "What serious listeners pick",
+        price: 40,
+        priceAnchor: "",
+        features: [
+          { name: "50 credits (~50 podcast hours)" },
+          { name: "$0.80 per podcast hour" },
         ],
       },
     ],
