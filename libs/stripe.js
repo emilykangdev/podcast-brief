@@ -1,11 +1,11 @@
 import Stripe from "stripe";
 
-// This is used to create a Stripe Checkout for one-time payments. It's usually triggered with the <ButtonCheckout /> component. Webhooks are used to update the user's state in the database.
+// Creates a Stripe Embedded Checkout session. Returns the client_secret for the
+// EmbeddedCheckoutProvider on the frontend. Webhook handles post-payment crediting.
 export const createCheckout = async ({
   priceId,
   mode,
-  successUrl,
-  cancelUrl,
+  returnUrl,
   couponId,
   clientReferenceId,
   user,
@@ -19,8 +19,6 @@ export const createCheckout = async ({
   } else {
     if (mode === "payment") {
       extraParams.customer_creation = "always";
-      // The option below costs 0.4% (up to $2) per invoice. Alternatively, you can use https://zenvoice.io/ to create unlimited invoices automatically.
-      // extraParams.invoice_creation = { enabled: true };
       extraParams.payment_intent_data = { setup_future_usage: "on_session" };
     }
     if (user?.email) {
@@ -30,28 +28,19 @@ export const createCheckout = async ({
   }
 
   const stripeSession = await stripe.checkout.sessions.create({
+    ui_mode: "embedded",
     mode,
-    allow_promotion_codes: true,
     client_reference_id: clientReferenceId,
-    line_items: [
-      {
-        price: priceId,
-        quantity: 1,
-      },
-    ],
-    discounts: couponId
-      ? [
-          {
-            coupon: couponId,
-          },
-        ]
-      : [],
-    success_url: successUrl,
-    cancel_url: cancelUrl,
+    line_items: [{ price: priceId, quantity: 1 }],
+    return_url: returnUrl,
+    // allow_promotion_codes and discounts are mutually exclusive in the Stripe API
+    ...(couponId
+      ? { discounts: [{ coupon: couponId }] }
+      : { allow_promotion_codes: true }),
     ...extraParams,
   });
 
-  return stripeSession.url;
+  return stripeSession.client_secret;
 };
 
 // This is used to create Customer Portal sessions, so users can manage their subscriptions (payment methods, cancel, etc..)
