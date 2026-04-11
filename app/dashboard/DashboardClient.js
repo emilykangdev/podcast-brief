@@ -8,7 +8,7 @@ import apiClient from "@/libs/api";
 import BriefRequestForm from "@/components/BriefRequestForm";
 import BriefModal from "@/components/BriefModal";
 import CreditBalance from "@/components/CreditBalance";
-import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
+import CreditPackModal from "@/components/CreditPackModal";
 
 export default function DashboardClient({ briefs, credits, userEmail }) {
   const router = useRouter();
@@ -122,10 +122,11 @@ export default function DashboardClient({ briefs, credits, userEmail }) {
         />
       )}
 
-      <InsufficientCreditsModal
+      <CreditPackModal
         isOpen={showCreditsModal}
         onClose={() => setShowCreditsModal(false)}
-        creditData={regenCreditData}
+        title="Not enough credits"
+        subtitle={regenCreditData?.message || `You need ${regenCreditData?.creditsNeeded ?? "more"} credits but have ${regenCreditData?.creditsRemaining ?? 0}.`}
       />
     </>
   );

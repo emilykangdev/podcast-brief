@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatDuration } from "@/libs/credits";
-import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
+import CreditPackModal from "@/components/CreditPackModal";
 
 function descriptionFor(entry) {
   const dur = entry.durationSeconds ? ` (${formatDuration(entry.durationSeconds)})` : "";
@@ -90,7 +90,7 @@ export default function BillingClient({ entries, credits }) {
           </button>
         </div>
       )}
-      <InsufficientCreditsModal
+      <CreditPackModal
         isOpen={showBuyModal}
         onClose={() => setShowBuyModal(false)}
         title="Buy More Credits"

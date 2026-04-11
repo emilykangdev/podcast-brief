@@ -4,7 +4,7 @@
 import { useState } from "react";
 import apiClient from "@/libs/api";
 import { formatDuration } from "@/libs/credits";
-import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
+import CreditPackModal from "@/components/CreditPackModal";
 
 export default function BriefRequestForm({ onSuccess }) {
   const [url, setUrl] = useState("");
@@ -127,10 +127,11 @@ export default function BriefRequestForm({ onSuccess }) {
         )}
       </form>
 
-      <InsufficientCreditsModal
+      <CreditPackModal
         isOpen={showInsufficientModal}
         onClose={() => setShowInsufficientModal(false)}
-        creditData={creditData}
+        title="Not enough credits"
+        subtitle={creditData?.message}
       />
     </>
   );
