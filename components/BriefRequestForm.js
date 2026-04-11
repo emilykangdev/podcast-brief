@@ -2,13 +2,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import apiClient from "@/libs/api";
-import config from "@/config";
 import { formatDuration } from "@/libs/credits";
+import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
 
 export default function BriefRequestForm({ onSuccess }) {
-  const router = useRouter();
   const [url, setUrl] = useState("");
   const [estimateResult, setEstimateResult] = useState(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
@@ -71,8 +69,6 @@ export default function BriefRequestForm({ onSuccess }) {
     setInlineErrorCode(null);
   }
 
-  // Sorted plans: 50-pack first (primary CTA), then 15, then 5
-  const sortedPlans = [...config.stripe.plans].sort((a, b) => b.credits - a.credits);
 
   return (
     <>
@@ -107,7 +103,7 @@ export default function BriefRequestForm({ onSuccess }) {
               {formatDuration(estimateResult.durationSeconds)} &middot; {estimateResult.creditsNeeded} credit{estimateResult.creditsNeeded === 1 ? "" : "s"}
             </p>
             <p className="text-sm text-base-content/60">
-              You have {estimateResult.creditsRemaining} credit{estimateResult.creditsRemaining === 1 ? "" : "s"} remaining
+              You will have {estimateResult.creditsRemaining - estimateResult.creditsNeeded} credit{estimateResult.creditsRemaining - estimateResult.creditsNeeded === 1 ? "" : "s"} remaining
             </p>
           </div>
         )}
@@ -131,52 +127,11 @@ export default function BriefRequestForm({ onSuccess }) {
         )}
       </form>
 
-      {/* Insufficient credits modal */}
-      {showInsufficientModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-base-100 rounded-lg p-6 max-w-sm w-full mx-4 space-y-4">
-            <h3 className="font-bold text-lg">Not enough credits</h3>
-            <p className="text-sm text-base-content/70">
-              {creditData?.message || "You need more credits to generate this brief."}
-            </p>
-            <div className="space-y-2">
-              {sortedPlans.map((plan, i) => (
-                i === 0 ? (
-                  <button
-                    key={plan.priceId}
-                    className="btn btn-primary btn-block"
-                    onClick={() => router.push(`/checkout?priceId=${plan.priceId}&mode=payment`)}
-                  >
-                    {plan.credits} credits &mdash; ${plan.price}
-                  </button>
-                ) : i === 1 ? (
-                  <button
-                    key={plan.priceId}
-                    className="btn btn-outline btn-block"
-                    onClick={() => router.push(`/checkout?priceId=${plan.priceId}&mode=payment`)}
-                  >
-                    {plan.credits} credits &mdash; ${plan.price}
-                  </button>
-                ) : (
-                  <button
-                    key={plan.priceId}
-                    className="btn btn-ghost btn-sm btn-block"
-                    onClick={() => router.push(`/checkout?priceId=${plan.priceId}&mode=payment`)}
-                  >
-                    {plan.credits} credits &mdash; ${plan.price}
-                  </button>
-                )
-              ))}
-            </div>
-            <button
-              className="btn btn-ghost btn-sm btn-block"
-              onClick={() => setShowInsufficientModal(false)}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <InsufficientCreditsModal
+        isOpen={showInsufficientModal}
+        onClose={() => setShowInsufficientModal(false)}
+        creditData={creditData}
+      />
     </>
   );
 }

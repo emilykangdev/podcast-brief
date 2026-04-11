@@ -8,12 +8,15 @@ import apiClient from "@/libs/api";
 import BriefRequestForm from "@/components/BriefRequestForm";
 import BriefModal from "@/components/BriefModal";
 import CreditBalance from "@/components/CreditBalance";
+import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
 
 export default function DashboardClient({ briefs, credits, userEmail }) {
   const router = useRouter();
   const [selectedBrief, setSelectedBrief] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [showCreditsModal, setShowCreditsModal] = useState(false);
+  const [regenCreditData, setRegenCreditData] = useState(null);
 
   // Float in-progress briefs (queued/generating) to top so regenerated briefs are visible.
   // Within each group, the server-side created_at DESC order is preserved.
@@ -69,7 +72,11 @@ export default function DashboardClient({ briefs, credits, userEmail }) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       if (err.creditData) {
-        toast.error(`Not enough credits. You need ${err.creditData.creditsNeeded} credit${err.creditData.creditsNeeded === 1 ? "" : "s"} but have ${err.creditData.creditsRemaining}.`);
+        // Show the purchase modal instead of a toast
+        setRegenCreditData(err.creditData);
+        setShowCreditsModal(true);
+        setIsModalOpen(false);
+        setSelectedBrief(null);
       }
       // Re-throw so BriefModal's onClick catch can reset the "Regenerating..." state
       throw err;
@@ -114,6 +121,12 @@ export default function DashboardClient({ briefs, credits, userEmail }) {
           userEmail={userEmail}
         />
       )}
+
+      <InsufficientCreditsModal
+        isOpen={showCreditsModal}
+        onClose={() => setShowCreditsModal(false)}
+        creditData={regenCreditData}
+      />
     </>
   );
 }
