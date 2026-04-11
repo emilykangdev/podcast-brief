@@ -6,15 +6,20 @@ Generates structured briefs from podcast episodes. Users submit an Apple Podcast
 
 ```
 Browser (Vercel)
-  │ POST /api/jobs/brief { episodeUrl }
+  │
+  ├─ Pricing → /checkout (Stripe Embedded Checkout)
+  │    → Stripe webhook → credits added to profiles.credits + credit_ledger
+  │
+  ├─ POST /api/jobs/brief/estimate { episodeUrl }
+  │    → resolves episode, returns duration + credit cost + HMAC sig
+  │
+  ├─ POST /api/jobs/brief { episodeUrl, durationSeconds, sig }
+  │    → verifies HMAC, deducts credits atomically via Postgres RPC
+  │    → inserts brief row with status="queued"
+  │    → (does NOT call Railway — no direct communication)
+  │
   ▼
-app/api/jobs/brief/route.js     ← Next.js API route (server-side)
-  │ authenticates user via Supabase
-  │ creates brief row with status="queued"
-  │ returns { status: "queued", briefId }
-  │ (does NOT call Railway — no direct communication)
-  ▼
-Supabase (briefs table)          ← single source of truth
+Supabase (briefs + profiles + credit_ledger)
   │ status lifecycle: queued → generating → complete
   ▲                          │
   │ polls every 5s           │ writes status + output
@@ -24,10 +29,10 @@ server.mjs on Railway            ← persistent Express server
   │ runs 5-step pipeline sequentially
   │ sets status="complete" with output
   ▼
-User checks dashboard / receives email (email TBD)
+User checks dashboard / /billing for credit history
 ```
 
-**Key design decision:** Vercel and Railway never talk to each other directly. Supabase is the only communication channel. This means:
+**Key design decision:** Vercel and Railway never talk to each other directly. Supabase is the only communication channel. Credits are deducted at brief submission time (before the worker runs), not after. This means:
 - If Railway is down, user submissions are still saved (just wait in queue)
 - If Vercel is down, Railway keeps processing existing queue
 - No shared secrets between Vercel and Railway
@@ -177,10 +182,20 @@ If failure volume increases, revisit with an auto-refund mechanism in the worker
 ### 4-hour episode cap
 Episodes longer than 4 hours are rejected at the estimate endpoint with a friendly message. This stays within Deepgram's synchronous processing window. When demand for longer episodes appears, the async Deepgram callback plan can be shipped to raise the cap.
 
-## Checkout Routes
+## Routes
 
-- **`GET /checkout?priceId=xxx&mode=payment`** — Stripe Embedded Checkout form. Auth-guarded (redirects to `/signin` if not logged in). Renders Stripe's payment form inside an iframe on our domain. After payment, Stripe redirects to the return page.
-- **`GET /checkout/return?session_id=xxx`** — Post-payment status page. Auth-guarded. Verifies session ownership (`client_reference_id === user.id`). Shows success (with credits purchased), failure, or generic error. Links to dashboard.
+### Checkout
+- **`GET /checkout?priceId=xxx&mode=payment`** — Stripe Embedded Checkout form. Auth-guarded. Renders Stripe's payment form inside an iframe on our domain. After payment, Stripe redirects to the return page.
+- **`GET /checkout/return?session_id=xxx`** — Post-payment status page. Auth-guarded. Verifies session ownership (`client_reference_id === user.id`). Shows success (with credits purchased), failure, or generic error.
+
+### Billing
+- **`GET /billing`** — Credit balance + purchase/usage history. Auth-guarded. Shows humanized credit history (episode titles, durations, purchase amounts) with post-transaction balance snapshots. CSV export. "Buy More Credits" opens `CreditPackModal` (shared component — also used for insufficient-credits prompts on brief submission and regeneration).
+
+### API
+- **`POST /api/jobs/brief/estimate`** — Episode duration lookup + credit cost preview. Returns `{ durationSeconds, creditsNeeded, creditsRemaining, episodeTitle, sig }`.
+- **`POST /api/jobs/brief`** — Atomic credit deduction + brief queueing via Postgres RPC. Also handles regeneration (`{ regenerate: true }`).
+- **`POST /api/stripe/create-checkout`** — Creates Stripe Embedded Checkout session. Validates priceId against config, requires auth, rejects subscription mode.
+- **`POST /api/webhook/stripe`** — Stripe webhook. Idempotent credit accounting via insert-first pattern.
 
 ## Dashboard
 
@@ -219,6 +234,7 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 | Deepgram | Audio transcription | — |
 | OpenRouter | LLM API (brief generation) | — |
 | Exa | Search API (reference enrichment) | — |
+| Stripe | Payment processing (embedded checkout + webhooks) | `dashboard.stripe.com` |
 
 ## Env Vars
 
@@ -268,6 +284,16 @@ const { data: { user } } = await authSupabase.auth.getUser();
 const db = adminSupabase;                           // service-role
 // All queries below use db.from("briefs").eq("profile_id", user.id)...
 ```
+
+## Shared Components
+
+- **`CreditPackModal`** — Reusable credit pack picker modal. Accepts `title` and `subtitle` props. Used in 3 contexts: billing page "Buy More Credits", brief submission insufficient-credits prompt, and regeneration insufficient-credits prompt. Shows 50-pack (primary), 15-pack (outline), 5-pack (ghost) — all read from `config.stripe.plans`.
+- **`CreditBalance`** — Display-only component showing "{N} credits remaining". Receives `credits` as a prop from the server component (no client-side fetching).
+- **`getRegenCost(completedAt, creditsCharged)`** — Shared function in `libs/credits.js`. Returns 0 if within 24h of completion or if `creditsCharged` is null (pre-credit briefs), otherwise returns `creditsCharged`. Used by both the API route and BriefModal — single source of truth for regen pricing.
+
+## Config Pattern
+
+`config.js` is a shared module imported by both server and client code. Stripe price IDs use `NEXT_PUBLIC_` env vars (not secrets — visible in checkout URLs) so they're available in client components like `CreditPackModal`. No ternary branching — each Vercel environment (Preview/Production) sets its own price IDs.
 
 ## URL Env Var Convention
 
@@ -360,11 +386,13 @@ The badge is based on whether the user has a readable brief — not on internal 
 
 | Call | Credits | When |
 |------|---------|------|
-| User submits episode | 1 credit | Always |
+| User submits episode | N credits (1 per audio hour, rounded up) | Always |
 | Worker internal retry (validation failure) | 0 credits | Only if LLM output fails validation (missing sections or 0 references). Max 1 retry. |
-| User clicks regenerate | 0 credits | Optional. One free regen per brief. Entire pipeline re-runs. |
+| User regenerates (within 24h) | 0 credits | Quality guarantee — free regen window |
+| User regenerates (after 24h) | N credits (same as original) | Full price — uses `getRegenCost()` from `libs/credits.js` |
+| Pre-credit brief regen | 0 credits | Always free — `credits_charged` is NULL |
 
-Worst case: 3 LLM calls (original + 1 internal retry + 1 user regen) for 1 credit. The internal retry is invisible to the user.
+Worst case: 3 LLM calls (original + 1 internal retry + 1 user regen) for N credits. The internal retry is invisible to the user. Regen pricing logic is shared between the API route and BriefModal via `getRegenCost()` — single source of truth, no drift.
 
 ### `error_log` structure
 
