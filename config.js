@@ -14,8 +14,9 @@ const config = {
   },
   stripe: {
     // Price IDs are env vars, set per environment in Vercel:
-    //   Production: STRIPE_PRICE_5_CREDITS=price_live_xxx
-    //   Preview:    STRIPE_PRICE_5_CREDITS=price_test_xxx
+    //   Production: NEXT_PUBLIC_STRIPE_PRICE_5_CREDITS=price_live_xxx
+    //   Preview:    NEXT_PUBLIC_STRIPE_PRICE_5_CREDITS=price_test_xxx
+    // NEXT_PUBLIC_ prefix required — config.js is imported by client components.
     // No ternary, no APP_ENV branching — each environment gets exactly what's configured.
     plans: [
       {
