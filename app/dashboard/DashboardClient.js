@@ -7,12 +7,16 @@ import JSZip from "jszip";
 import apiClient from "@/libs/api";
 import BriefRequestForm from "@/components/BriefRequestForm";
 import BriefModal from "@/components/BriefModal";
+import CreditBalance from "@/components/CreditBalance";
+import CreditPackModal from "@/components/CreditPackModal";
 
-export default function DashboardClient({ briefs }) {
+export default function DashboardClient({ briefs, credits, userEmail }) {
   const router = useRouter();
   const [selectedBrief, setSelectedBrief] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [showCreditsModal, setShowCreditsModal] = useState(false);
+  const [regenCreditData, setRegenCreditData] = useState(null);
 
   // Float in-progress briefs (queued/generating) to top so regenerated briefs are visible.
   // Within each group, the server-side created_at DESC order is preserved.
@@ -66,13 +70,22 @@ export default function DashboardClient({ briefs }) {
       setSelectedBrief(null);
       router.refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch {
-      // apiClient interceptor handles toast errors
+    } catch (err) {
+      if (err.creditData) {
+        // Show the purchase modal instead of a toast
+        setRegenCreditData(err.creditData);
+        setShowCreditsModal(true);
+        setIsModalOpen(false);
+        setSelectedBrief(null);
+      }
+      // Re-throw so BriefModal's onClick catch can reset the "Regenerating..." state
+      throw err;
     }
   }
 
   return (
     <>
+      <CreditBalance credits={credits} />
       <BriefRequestForm onSuccess={() => router.refresh()} />
 
       <div className="flex justify-between items-center">
@@ -105,8 +118,16 @@ export default function DashboardClient({ briefs }) {
           isOpen={isModalOpen}
           onClose={() => { setIsModalOpen(false); setSelectedBrief(null); }}
           onRegenerate={handleRegenerate}
+          userEmail={userEmail}
         />
       )}
+
+      <CreditPackModal
+        isOpen={showCreditsModal}
+        onClose={() => setShowCreditsModal(false)}
+        title="Not enough credits"
+        subtitle={regenCreditData?.message || `You need ${regenCreditData?.creditsNeeded ?? "more"} credits but have ${regenCreditData?.creditsRemaining ?? 0}.`}
+      />
     </>
   );
 }

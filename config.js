@@ -13,41 +13,47 @@ const config = {
     onlyShowOnRoutes: ["/"],
   },
   stripe: {
-    // Create multiple plans in your Stripe dashboard, then add them here. You can add as many plans as you want, just make sure to add the priceId
+    // Price IDs are env vars, set per environment in Vercel:
+    //   Production: NEXT_PUBLIC_STRIPE_PRICE_5_CREDITS=price_live_xxx
+    //   Preview:    NEXT_PUBLIC_STRIPE_PRICE_5_CREDITS=price_test_xxx
+    // NEXT_PUBLIC_ prefix required — config.js is imported by client components.
+    // No ternary, no APP_ENV branching — each environment gets exactly what's configured.
     plans: [
       {
-        // REQUIRED — we use this to find the plan in the webhook (for instance if you want to update the user's credits based on the plan)
-        priceId:
-          process.env.NODE_ENV === "development" ? "price_1T8RAZGYah0xPaVcgjGKMXSE" : "price_456",
-        //  REQUIRED - Name of the plan, displayed on the pricing page
-        name: "3 Briefs",
-        // A friendly description of the plan, displayed on the pricing page. Tip: explain why this plan and not others
-        description: "Perfect for trying it out",
-        // The price you want to display, the one user will be charged on Stripe.
-        price: 5,
-        // If you have an anchor price (i.e. $29) that you want to display crossed out, put it here. Otherwise, leave it empty
+        priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_5_CREDITS,
+        name: "5 Credits",
+        credits: 5,
+        description: "Try it out",
+        price: 6,
         priceAnchor: "",
         features: [
-          {
-            name: "3 Briefs",
-          },
-          { name: "Sent to your email inbox" },
+          { name: "5 credits (~5 podcast hours)" },
+          { name: "$1.20 per podcast hour" },
         ],
       },
       {
-        // This plan will look different on the pricing page, it will be highlighted. You can only have one plan with isFeatured: true
-        isFeatured: true,
-        priceId:
-          process.env.NODE_ENV === "development" ? "price_1T8RArGYah0xPaVcTXSHB6QP" : "price_456",
-        name: "10 Briefs",
-        description: "You want more learning power",
-        price: 25,
+        priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_15_CREDITS,
+        name: "15 Credits",
+        credits: 15,
+        description: "The middle ground",
+        price: 15,
         priceAnchor: "",
         features: [
-          {
-            name: "10 Briefs",
-          },
-          { name: "Sent to your email inbox" },
+          { name: "15 credits (~15 podcast hours)" },
+          { name: "$1.00 per podcast hour" },
+        ],
+      },
+      {
+        isFeatured: true,
+        priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_50_CREDITS,
+        name: "50 Credits",
+        credits: 50,
+        description: "What serious learners pick",
+        price: 40,
+        priceAnchor: "",
+        features: [
+          { name: "50 credits (~50 podcast hours)" },
+          { name: "$0.80 per podcast hour" },
         ],
       },
     ],
