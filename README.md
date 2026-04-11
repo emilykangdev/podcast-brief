@@ -156,6 +156,24 @@ The Stripe webhook uses an **insert-first pattern**: it attempts to INSERT a `cr
 | Regen after 24h | N credits (same as original) | Full price |
 | Pre-credit brief regen | 0 credits | Always free |
 
+### Refund policy (failed briefs)
+
+Credits are deducted at submission time (before the worker runs). If the pipeline fails (e.g., Deepgram rejects the audio URL), **credits are not automatically refunded**. This is intentional — prevents abuse from URLs that always fail, and failure volume is low.
+
+**Manual refund via Supabase SQL** when a user reports a failed brief:
+```sql
+-- 1. Refund credits (replace <credits_charged> and <user_id> from the failed brief row)
+UPDATE profiles SET credits = credits + <credits_charged> WHERE id = '<user_id>';
+
+-- 2. Audit trail
+INSERT INTO credit_ledger (profile_id, delta_credits, credits_left, reason, environment)
+VALUES ('<user_id>', <credits_charged>,
+  (SELECT credits FROM profiles WHERE id = '<user_id>'),
+  'refund:brief_failure', '<ENVIRONMENT>');
+```
+
+If failure volume increases, revisit with an auto-refund mechanism in the worker.
+
 ### 4-hour episode cap
 Episodes longer than 4 hours are rejected at the estimate endpoint with a friendly message. This stays within Deepgram's synchronous processing window. When demand for longer episodes appears, the async Deepgram callback plan can be shipped to raise the cap.
 
@@ -210,6 +228,7 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` — Stripe publishable key (browser-safe, for embedded checkout form)
 - `STRIPE_SECRET_KEY` — Stripe secret key (server-only, for creating checkout sessions)
 - `STRIPE_WEBHOOK_SECRET` — Stripe webhook signing secret (server-only, for verifying webhook payloads)
+- `STRIPE_PRICE_5_CREDITS`, `STRIPE_PRICE_15_CREDITS`, `STRIPE_PRICE_50_CREDITS` — Stripe price IDs for the 3 credit packs. Set per environment (test-mode IDs for Preview, live-mode IDs for Production).
 - `APP_ENV` — `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Written to `briefs.environment` at submission time.
 
 ### Railway (Worker)

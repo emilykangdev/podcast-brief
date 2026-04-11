@@ -1,7 +1,3 @@
-// APP_ENV, not NODE_ENV — staging runs NODE_ENV=production on Vercel,
-// so using NODE_ENV would send staging users to LIVE Stripe priceIds.
-const isProduction = process.env.APP_ENV === "PRODUCTION";
-
 const config = {
   // REQUIRED
   appName: "PodcastBrief",
@@ -17,10 +13,13 @@ const config = {
     onlyShowOnRoutes: ["/"],
   },
   stripe: {
+    // Price IDs are env vars, set per environment in Vercel:
+    //   Production: STRIPE_PRICE_5_CREDITS=price_live_xxx
+    //   Preview:    STRIPE_PRICE_5_CREDITS=price_test_xxx
+    // No ternary, no APP_ENV branching — each environment gets exactly what's configured.
     plans: [
       {
-        // TODO: replace with real Stripe priceId after creating in dashboard (test mode)
-        priceId: isProduction ? "price_PROD_5_CREDITS" : "price_1T8RArGYah0xPaVcTXSHB6QP",
+        priceId: process.env.STRIPE_PRICE_5_CREDITS,
         name: "5 Credits",
         credits: 5,
         description: "Try it out",
@@ -32,8 +31,7 @@ const config = {
         ],
       },
       {
-        // TODO: replace with real Stripe priceId after creating in dashboard (test mode)
-        priceId: isProduction ? "price_PROD_15_CREDITS" : "price_1T8RAZGYah0xPaVcgjGKMXSE",
+        priceId: process.env.STRIPE_PRICE_15_CREDITS,
         name: "15 Credits",
         credits: 15,
         description: "The middle ground",
@@ -46,8 +44,7 @@ const config = {
       },
       {
         isFeatured: true,
-        // TODO: replace with real Stripe priceId after creating in dashboard (test mode)
-        priceId: isProduction ? "price_PROD_50_CREDITS" : "price_1TKDIkGYah0xPaVcEnjrYbJi",
+        priceId: process.env.STRIPE_PRICE_50_CREDITS,
         name: "50 Credits",
         credits: 50,
         description: "What serious learners pick",
