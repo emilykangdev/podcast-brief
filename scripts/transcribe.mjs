@@ -54,6 +54,7 @@ async function transcribe(deepgram, audioFilePath, audioUrl) {
   console.error("Transcribing via Deepgram (this may take a few minutes)...");
 
   const opts = { model: "nova-2", smart_format: true, diarize: true, utterances: true };
+  const reqOpts = { timeoutInSeconds: 600 }; // 10 min — large files need upload + processing time
 
   // Try file-based first (CDN-proof)
   let fileError = null;
@@ -61,7 +62,8 @@ async function transcribe(deepgram, audioFilePath, audioUrl) {
     try {
       return await deepgram.listen.v1.media.transcribeFile(
         fs.createReadStream(audioFilePath),
-        opts
+        opts,
+        reqOpts
       );
     } catch (err) {
       fileError = err;
@@ -71,7 +73,7 @@ async function transcribe(deepgram, audioFilePath, audioUrl) {
 
   // Fallback: let Deepgram fetch the URL directly
   try {
-    return await deepgram.listen.v1.media.transcribeUrl({ url: audioUrl, ...opts });
+    return await deepgram.listen.v1.media.transcribeUrl({ url: audioUrl, ...opts }, reqOpts);
   } catch (urlError) {
     const msg = fileError
       ? `Deepgram file error: ${fileError.message}; URL fallback error: ${urlError.message ?? urlError}`
