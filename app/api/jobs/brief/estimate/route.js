@@ -35,7 +35,7 @@ export async function POST(req) {
   if (episode.durationSeconds > MAX_EPISODE_SECONDS) {
     return NextResponse.json({
       error: "episode_too_long",
-      message: `This episode is ${formatDuration(episode.durationSeconds)}. We currently support podcasts up to 4 hours. Email podcastbrief.support@gmail.com if you'd like us to support longer episodes — we're tracking demand!`,
+      message: `This episode is ${formatDuration(episode.durationSeconds)}. We currently support podcasts up to 4 hours.`,
       durationSeconds: episode.durationSeconds,
       maxDurationSeconds: MAX_EPISODE_SECONDS,
     }, { status: 422 });

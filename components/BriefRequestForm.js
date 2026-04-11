@@ -14,12 +14,14 @@ export default function BriefRequestForm({ onSuccess }) {
   const [estimateLoading, setEstimateLoading] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [inlineError, setInlineError] = useState(null);
+  const [inlineErrorCode, setInlineErrorCode] = useState(null);
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
   const [creditData, setCreditData] = useState(null);
 
   async function handleEstimate() {
     setEstimateLoading(true);
     setInlineError(null);
+    setInlineErrorCode(null);
     setEstimateResult(null);
 
     try {
@@ -32,6 +34,7 @@ export default function BriefRequestForm({ onSuccess }) {
         setShowInsufficientModal(true);
       } else if (err.response?.status === 422) {
         setInlineError(err.response.data.message || err.message);
+        setInlineErrorCode(err.response.data.error || null);
       }
       // 401 handled by apiClient (redirect), other errors toasted by apiClient
     } finally {
@@ -65,6 +68,7 @@ export default function BriefRequestForm({ onSuccess }) {
   function handleReset() {
     setEstimateResult(null);
     setInlineError(null);
+    setInlineErrorCode(null);
   }
 
   // Sorted plans: 50-pack first (primary CTA), then 15, then 5
@@ -83,7 +87,17 @@ export default function BriefRequestForm({ onSuccess }) {
         />
 
         {inlineError && (
-          <p className="text-error text-sm">{inlineError}</p>
+          <div className="text-error text-sm space-y-2">
+            <p>{inlineError}</p>
+            {inlineErrorCode === "episode_too_long" && (
+              <a
+                href={`mailto:podcastbrief.support@gmail.com?subject=${encodeURIComponent("Interest in longer episode support")}&body=${encodeURIComponent("Hi, I'm interested in getting briefs for episodes longer than 4 hours.\n\nFor example:\n- (Insert podcasts here, optional)")}`}
+                className="btn btn-sm btn-outline"
+              >
+                Let us know you want longer episodes
+              </a>
+            )}
+          </div>
         )}
 
         {estimateResult && (
