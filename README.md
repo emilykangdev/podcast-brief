@@ -211,7 +211,7 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 
 ## Pipeline Steps (server.mjs)
 
-1. **Transcribe** — Deepgram transcription via Browserbase browser session
+1. **Transcribe** — Download audio with podcast-app UA, then Deepgram file transcription (falls back to URL-based if download fails)
 2. **Generate brief** — LLM summarization via OpenRouter
 3. **Enrich references** — Exa search to find URLs for entities mentioned in the episode
 4. **Validate references** — Browserbase browser session to verify URLs are live
@@ -230,7 +230,7 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 | Vercel | Next.js frontend + API routes | `podcast-brief.vercel.app` |
 | Railway | Worker server (pipeline execution) | `podcast-brief-staging.up.railway.app` |
 | Supabase | Auth, database, brief storage | `whojufsiiwhermzgnhlo.supabase.co` |
-| Browserbase | Headless browser for transcription + reference validation | — |
+| Browserbase | Headless browser for reference validation | — |
 | Deepgram | Audio transcription | — |
 | OpenRouter | LLM API (brief generation) | — |
 | Exa | Search API (reference enrichment) | — |
@@ -345,7 +345,7 @@ The badge is based on whether the user has a readable brief — not on internal 
 ### Pipeline error flow (step by step)
 
 ```
-1. TRANSCRIBE (Deepgram)
+1. TRANSCRIBE (download audio → Deepgram file transcription, URL fallback)
    ✓ → continue to step 2
    ✗ → catch block: completeBrief(briefId, { errorLog })
         output_markdown stays null (never written)
