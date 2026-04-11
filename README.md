@@ -228,7 +228,7 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` — Stripe publishable key (browser-safe, for embedded checkout form)
 - `STRIPE_SECRET_KEY` — Stripe secret key (server-only, for creating checkout sessions)
 - `STRIPE_WEBHOOK_SECRET` — Stripe webhook signing secret (server-only, for verifying webhook payloads)
-- `STRIPE_PRICE_5_CREDITS`, `STRIPE_PRICE_15_CREDITS`, `STRIPE_PRICE_50_CREDITS` — Stripe price IDs for the 3 credit packs. Set per environment (test-mode IDs for Preview, live-mode IDs for Production).
+- `NEXT_PUBLIC_STRIPE_PRICE_5_CREDITS`, `NEXT_PUBLIC_STRIPE_PRICE_15_CREDITS`, `NEXT_PUBLIC_STRIPE_PRICE_50_CREDITS` — Stripe price IDs for the 3 credit packs. `NEXT_PUBLIC_` prefix required because config.js is imported by client components (price IDs are not secrets — visible in checkout URLs). Set per environment (test-mode for Preview, live-mode for Production).
 - `APP_ENV` — `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Written to `briefs.environment` at submission time.
 
 ### Railway (Worker)

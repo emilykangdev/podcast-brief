@@ -19,7 +19,7 @@ const config = {
     // No ternary, no APP_ENV branching — each environment gets exactly what's configured.
     plans: [
       {
-        priceId: process.env.STRIPE_PRICE_5_CREDITS,
+        priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_5_CREDITS,
         name: "5 Credits",
         credits: 5,
         description: "Try it out",
@@ -31,7 +31,7 @@ const config = {
         ],
       },
       {
-        priceId: process.env.STRIPE_PRICE_15_CREDITS,
+        priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_15_CREDITS,
         name: "15 Credits",
         credits: 15,
         description: "The middle ground",
@@ -44,7 +44,7 @@ const config = {
       },
       {
         isFeatured: true,
-        priceId: process.env.STRIPE_PRICE_50_CREDITS,
+        priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_50_CREDITS,
         name: "50 Credits",
         credits: 50,
         description: "What serious learners pick",
