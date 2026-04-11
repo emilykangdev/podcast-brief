@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/libs/supabase/server";
 import adminSupabase from "@/libs/supabase/admin.mjs";
-import { MAX_EPISODE_SECONDS, creditsNeeded as calcCredits } from "@/libs/credits";
+import { MAX_EPISODE_SECONDS, creditsNeeded as calcCredits, getRegenCost } from "@/libs/credits";
 import { verifyEstimate } from "@/libs/estimate-signer";
 
 const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
@@ -40,12 +40,7 @@ async function handleRegenerate(db, user, episodeUrl) {
     return NextResponse.json({ error: "No completed brief found to regenerate" }, { status: 404 });
   }
 
-  // Free within 24h of completion. If completed_at is null (shouldn't happen for
-  // status=complete, but guard against it), treat as outside the free window.
-  const isFreeWindow = completedBrief.completed_at
-    ? (Date.now() - new Date(completedBrief.completed_at).getTime()) / (1000 * 60 * 60) <= 24
-    : false;
-  const regenCost = isFreeWindow ? 0 : (completedBrief.credits_charged ?? 0);
+  const regenCost = getRegenCost(completedBrief.completed_at, completedBrief.credits_charged);
 
   const { data: result, error: rpcError } = await db.rpc("consume_credits_and_regenerate_brief", {
     p_profile_id: user.id,

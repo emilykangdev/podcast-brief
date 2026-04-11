@@ -4,6 +4,7 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Modal from "@/components/Modal";
+import { getRegenCost } from "@/libs/credits";
 
 export default function BriefModal({ brief, isOpen, onClose, onRegenerate, userEmail }) {
   const [copied, setCopied] = useState(false);
@@ -55,11 +56,7 @@ export default function BriefModal({ brief, isOpen, onClose, onRegenerate, userE
           </button>
         )}
         {brief.status === "complete" && brief.regeneration_count === 0 && (() => {
-          const hoursSince = brief.completed_at
-            ? (Date.now() - new Date(brief.completed_at).getTime()) / 3_600_000
-            : null;
-          const isFree = hoursSince != null && hoursSince <= 24;
-          const regenCost = isFree ? 0 : (brief.credits_charged ?? 0);
+          const regenCost = getRegenCost(brief.completed_at, brief.credits_charged);
           const label = regenCost === 0
             ? "Regenerate (free)"
             : `Regenerate (${regenCost} credit${regenCost === 1 ? "" : "s"})`;

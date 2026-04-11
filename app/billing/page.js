@@ -5,10 +5,10 @@ export const dynamic = "force-dynamic";
 
 function parseReason(reason) {
   if (reason === "signup_bonus") return { type: "signup_bonus" };
-  if (reason.startsWith("refund:")) return { type: "refund", label: reason.split(":")[1] };
+  if (reason.startsWith("refund:")) return { type: "refund", label: reason.split(":").slice(1).join(":") };
   if (reason.startsWith("purchase:")) return { type: "purchase", label: reason.split(":").slice(1).join(":") };
-  if (reason.startsWith("brief:")) return { type: "brief", briefId: reason.split(":")[1] };
-  if (reason.startsWith("regen:")) return { type: "regen", briefId: reason.split(":")[1] };
+  if (reason.startsWith("brief:")) return { type: "brief", briefId: reason.split(":").slice(1).join(":") };
+  if (reason.startsWith("regen:")) return { type: "regen", briefId: reason.split(":").slice(1).join(":") };
   return { type: "unknown", label: reason };
 }
 
