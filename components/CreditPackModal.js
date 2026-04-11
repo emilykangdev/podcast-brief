@@ -3,10 +3,9 @@
 import { useRouter } from "next/navigation";
 import config from "@/config";
 
-// Sorted plans: largest first (primary CTA), then descending. 5-pack hidden.
+// Sorted plans: largest first (primary CTA), then descending.
 const sortedPlans = [...config.stripe.plans]
-  .sort((a, b) => b.credits - a.credits)
-  .filter((_, i) => i < 2);
+  .sort((a, b) => b.credits - a.credits);
 
 export default function CreditPackModal({ isOpen, onClose, title, subtitle }) {
   const router = useRouter();
@@ -22,7 +21,7 @@ export default function CreditPackModal({ isOpen, onClose, title, subtitle }) {
           {sortedPlans.map((plan, i) => (
             <button
               key={plan.priceId}
-              className={i === 0 ? "btn btn-primary btn-block" : "btn btn-outline btn-block"}
+              className={i === 0 ? "btn btn-primary btn-block" : i === 1 ? "btn btn-outline btn-block" : "btn btn-ghost btn-sm btn-block"}
               onClick={() => router.push(`/checkout?priceId=${plan.priceId}&mode=payment`)}
             >
               {plan.credits} credits &mdash; ${plan.price}
