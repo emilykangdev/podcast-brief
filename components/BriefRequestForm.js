@@ -30,9 +30,11 @@ export default function BriefRequestForm({ onSuccess }) {
         // 402 — insufficient credits
         setCreditData(err.creditData);
         setShowInsufficientModal(true);
-      } else if (err.response?.status === 422) {
-        setInlineError(err.response.data.message || err.message);
-        setInlineErrorCode(err.response.data.error || null);
+      } else if (err.response?.status === 422 || err.response?.status === 500) {
+        setInlineError(
+          err.response.data?.message || "Something went wrong. Please try again."
+        );
+        setInlineErrorCode(err.response.data?.error || null);
       }
       // 401 handled by apiClient (redirect), other errors toasted by apiClient
     } finally {

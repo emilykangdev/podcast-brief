@@ -27,7 +27,7 @@ apiClient.interceptors.response.use(
     } else if (error.response?.status === 403) {
       message = "Pick a plan to use this feature";
     } else {
-      message = error?.response?.data?.error || error.message || error.toString();
+      message = error?.response?.data?.message || error?.response?.data?.error || error.message || error.toString();
     }
 
     error.message = typeof message === "string" ? message : JSON.stringify(message);

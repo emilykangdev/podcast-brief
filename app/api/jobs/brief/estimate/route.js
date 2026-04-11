@@ -17,6 +17,9 @@ export async function POST(req) {
     episode = await resolveEpisode(episodeUrl);
   } catch (err) {
     const status = err.message?.startsWith("[422]") ? 422 : 500;
+    if (status === 500) {
+      console.error("resolveEpisode failed:", err.message, err.stack);
+    }
     return NextResponse.json({
       error: "episode_not_found",
       message: status === 422
