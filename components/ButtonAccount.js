@@ -4,17 +4,10 @@
 import { useState, useEffect } from "react";
 import { Popover, Transition } from "@headlessui/react";
 import { createClient } from "@/libs/supabase/client";
-import apiClient from "@/libs/api";
+import Link from "next/link";
 
-// A button to show user some account actions
-//  1. Billing: open a Stripe Customer Portal to manage their billing (cancel subscription, update payment method, etc.).
-//     You have to manually activate the Customer Portal in your Stripe Dashboard (https://dashboard.stripe.com/test/settings/billing/portal)
-//     This is only available if the customer has a customerId (they made a purchase previously)
-//  2. Logout: sign out and go back to homepage
-// See more at https://shipfa.st/docs/components/buttonAccount
 const ButtonAccount = () => {
   const supabase = createClient();
-  const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -32,22 +25,6 @@ const ButtonAccount = () => {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     window.location.href = "/";
-  };
-
-  const handleBilling = async () => {
-    setIsLoading(true);
-
-    try {
-      const { url } = await apiClient.post("/stripe/create-portal", {
-        returnUrl: window.location.href,
-      });
-
-      window.location.href = url;
-    } catch (e) {
-      console.error(e);
-    }
-
-    setIsLoading(false);
   };
 
   return (
@@ -72,22 +49,18 @@ const ButtonAccount = () => {
 
             {user?.user_metadata?.name || user?.email?.split("@")[0] || "Account"}
 
-            {isLoading ? (
-              <span className="loading loading-spinner loading-xs"></span>
-            ) : (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className={`w-5 h-5 duration-200 opacity-50 ${open ? "transform rotate-180 " : ""}`}
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            )}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className={`w-5 h-5 duration-200 opacity-50 ${open ? "transform rotate-180 " : ""}`}
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                clipRule="evenodd"
+              />
+            </svg>
           </Popover.Button>
           <Transition
             enter="transition duration-100 ease-out"
@@ -100,9 +73,10 @@ const ButtonAccount = () => {
             <Popover.Panel className="absolute left-0 z-10 mt-3 w-screen max-w-[16rem] transform">
               <div className="overflow-hidden rounded-xl shadow-xl ring-1 ring-base-content/10 bg-base-100 p-1">
                 <div className="space-y-0.5 text-sm">
-                  <button
+                  <Popover.Button
+                    as={Link}
+                    href="/billing"
                     className="flex items-center gap-2 hover:bg-base-300 duration-200 py-1.5 px-4 w-full rounded-lg font-medium"
-                    onClick={handleBilling}
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -117,7 +91,7 @@ const ButtonAccount = () => {
                       />
                     </svg>
                     Billing
-                  </button>
+                  </Popover.Button>
                   <button
                     className="flex items-center gap-2 hover:bg-error/20 hover:text-error duration-200 py-1.5 px-4 w-full rounded-lg font-medium"
                     onClick={handleSignOut}
