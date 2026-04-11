@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Modal from "@/components/Modal";
 
-export default function BriefModal({ brief, isOpen, onClose, onRegenerate }) {
+export default function BriefModal({ brief, isOpen, onClose, onRegenerate, userEmail }) {
   const [copied, setCopied] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
@@ -34,10 +34,18 @@ export default function BriefModal({ brief, isOpen, onClose, onRegenerate }) {
             {brief.output_markdown}
           </ReactMarkdown>
         </article>
+      ) : brief.status === "complete" ? (
+        <div className="mt-4 space-y-3">
+          <p className="text-base-content/50">Brief generation failed.</p>
+          <a
+            href={`mailto:podcastbrief.support@gmail.com?subject=${encodeURIComponent("Failed brief — requesting manual generation")}&body=${encodeURIComponent(`Hi, my brief for the following episode failed to generate:\n\n${brief.input_url}\n\nMy email is ${userEmail || "(not available)"}.\n\nCan you email me a successful brief for this episode?`)}`}
+            className="btn btn-sm btn-outline"
+          >
+            Report &amp; request brief
+          </a>
+        </div>
       ) : (
-        <p className="text-base-content/50 mt-4">
-          {brief.status === "complete" ? "Brief generation failed." : "Brief is being generated..."}
-        </p>
+        <p className="text-base-content/50 mt-4">Brief is being generated...</p>
       )}
 
       <div className="flex gap-2 mt-6 pt-4 border-t border-base-200">

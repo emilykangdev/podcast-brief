@@ -28,7 +28,7 @@ export default async function Dashboard() {
           <h1 className="text-3xl font-extrabold">Your Briefs</h1>
           <ButtonAccount />
         </div>
-        <DashboardClient briefs={briefs ?? []} credits={profile?.credits ?? 0} />
+        <DashboardClient briefs={briefs ?? []} credits={profile?.credits ?? 0} userEmail={user.email} />
       </section>
     </main>
   );

@@ -9,7 +9,7 @@ import BriefRequestForm from "@/components/BriefRequestForm";
 import BriefModal from "@/components/BriefModal";
 import CreditBalance from "@/components/CreditBalance";
 
-export default function DashboardClient({ briefs, credits }) {
+export default function DashboardClient({ briefs, credits, userEmail }) {
   const router = useRouter();
   const [selectedBrief, setSelectedBrief] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -111,6 +111,7 @@ export default function DashboardClient({ briefs, credits }) {
           isOpen={isModalOpen}
           onClose={() => { setIsModalOpen(false); setSelectedBrief(null); }}
           onRegenerate={handleRegenerate}
+          userEmail={userEmail}
         />
       )}
     </>
