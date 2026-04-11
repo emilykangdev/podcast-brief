@@ -4,12 +4,30 @@
 import { v5 as uuidv5 } from "uuid";
 import Parser from "rss-parser";
 
+async function fetchiTunes(url) {
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (err) {
+    throw new Error(`[500] iTunes API network error: ${err.message}`);
+  }
+  if (!res.ok) {
+    throw new Error(`[500] iTunes API returned HTTP ${res.status}`);
+  }
+  let body;
+  try {
+    body = await res.json();
+  } catch {
+    throw new Error("[500] iTunes API returned non-JSON response");
+  }
+  return body;
+}
+
 async function resolveFromEpisodeUrl(collectionId, trackId) {
   console.error(`Looking up episode (trackId: ${trackId})...`);
-  const res = await fetch(
+  const { results } = await fetchiTunes(
     `https://itunes.apple.com/lookup?id=${collectionId}&entity=podcastEpisode&limit=200`
   );
-  const { results } = await res.json();
   const episode = results?.find((r) => String(r.trackId) === trackId);
 
   if (!episode) {
@@ -29,8 +47,9 @@ async function resolveFromEpisodeUrl(collectionId, trackId) {
 
 async function resolveFromShowUrl(collectionId) {
   console.error(`Fetching latest episode from RSS...`);
-  const res = await fetch(`https://itunes.apple.com/lookup?id=${collectionId}&entity=podcast`);
-  const { results } = await res.json();
+  const { results } = await fetchiTunes(
+    `https://itunes.apple.com/lookup?id=${collectionId}&entity=podcast`
+  );
   const rssUrl = results?.[0]?.feedUrl;
 
   if (!rssUrl) {
