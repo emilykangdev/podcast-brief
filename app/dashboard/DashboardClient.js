@@ -69,10 +69,10 @@ export default function DashboardClient({ briefs, credits, userEmail }) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       if (err.creditData) {
-        // 402 — insufficient credits for paid regen (>24h window)
         toast.error(`Not enough credits. You need ${err.creditData.creditsNeeded} credit${err.creditData.creditsNeeded === 1 ? "" : "s"} but have ${err.creditData.creditsRemaining}.`);
       }
-      // Other errors (409, 500) are toasted by apiClient interceptor
+      // Re-throw so BriefModal's onClick catch can reset the "Regenerating..." state
+      throw err;
     }
   }
 

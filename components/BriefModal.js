@@ -80,7 +80,15 @@ export default function BriefModal({ brief, isOpen, onClose, onRegenerate, userE
             <button
               className="btn btn-sm btn-warning"
               disabled={regenerating}
-              onClick={() => { setRegenerating(true); onRegenerate(brief); }}
+              onClick={async () => {
+                setRegenerating(true);
+                try {
+                  await onRegenerate(brief);
+                } catch {
+                  setRegenerating(false);
+                  setShowConfirm(false);
+                }
+              }}
             >
               {regenerating ? "Regenerating..." : "Yes, regenerate"}
             </button>
