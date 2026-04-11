@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
 import { formatDuration } from "@/libs/credits";
+import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
 
 function descriptionFor(entry) {
   const dur = entry.durationSeconds ? ` (${formatDuration(entry.durationSeconds)})` : "";
@@ -16,6 +17,8 @@ function descriptionFor(entry) {
 }
 
 export default function BillingClient({ entries, credits }) {
+  const [showBuyModal, setShowBuyModal] = useState(false);
+
   function handleDownloadCsv() {
     const header = "Date,Credits,Balance,Description\n";
     const rows = entries.map((e) => {
@@ -40,9 +43,9 @@ export default function BillingClient({ entries, credits }) {
         <p className="text-lg font-semibold">
           {credits} credit{credits === 1 ? "" : "s"} remaining
         </p>
-        <Link href="/#pricing" className="btn btn-primary btn-sm">
+        <button className="btn btn-primary btn-sm" onClick={() => setShowBuyModal(true)}>
           Buy More Credits
-        </Link>
+        </button>
       </div>
 
       {/* Credit history table */}
@@ -87,6 +90,11 @@ export default function BillingClient({ entries, credits }) {
           </button>
         </div>
       )}
+      <InsufficientCreditsModal
+        isOpen={showBuyModal}
+        onClose={() => setShowBuyModal(false)}
+        title="Buy More Credits"
+      />
     </div>
   );
 }
