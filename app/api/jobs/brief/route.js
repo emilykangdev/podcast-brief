@@ -156,7 +156,7 @@ export async function POST(req) {
       event: "brief_queued",
       properties: { episode_url: episodeUrl },
     });
-    await posthog?.flush();
+    posthog?.flush().catch((e) => console.error("[posthog] flush failed:", e.message));
 
     return NextResponse.json({
       status: "queued",

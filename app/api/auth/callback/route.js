@@ -29,7 +29,7 @@ export async function GET(req) {
             properties: { email: user.email },
             uuid: `sign_up:${user.id}`,
           });
-          await posthog?.flush();
+          posthog?.flush().catch((e) => console.error("[posthog] flush failed:", e.message));
         }
         return NextResponse.redirect(new URL("/onboarding", requestUrl.origin));
       }

@@ -263,7 +263,7 @@ async function runPipeline(episodeUrl, profileId, briefId) {
     });
     if (posthog) {
       log(`[posthog] flushing ${traceId}`);
-      await posthog.flush();
+      await posthog.flush().catch((e) => logError(`[posthog] flush failed: ${e.message}`));
       log(`[posthog] flushed`);
     }
 

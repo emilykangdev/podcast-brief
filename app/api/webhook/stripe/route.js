@@ -110,7 +110,7 @@ export async function POST(req) {
           },
           uuid: event.id,
         });
-        await posthog?.flush();
+        posthog?.flush().catch((e) => console.error("[posthog] flush failed:", e.message));
 
         break;
       }
