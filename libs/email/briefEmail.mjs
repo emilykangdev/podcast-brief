@@ -252,14 +252,16 @@ function buildEmailHtml(bodyHtml, { episodeTitle, podcastName }) {
 /**
  * Sends the completed brief as an email to the profile owner.
  *
- * Idempotent: a unique index on brief_email_deliveries(brief_id) ensures only
- * one delivery attempt is recorded. Duplicate calls (e.g. retried pipeline
- * steps) return early on a 23505 unique-violation error.
+ * Idempotent: a unique index on brief_email_deliveries(brief_id, completed_at)
+ * ensures exactly one email per brief completion. Regenerations get a new
+ * completed_at, so a new email is sent. Retries/crashes of the same completion
+ * are blocked by the unique constraint. Old delivery rows are preserved for audit.
  *
  * @param {Object} params
  * @param {string} params.briefId
  * @param {string} params.profileId
  * @param {string} params.outputMarkdown
+ * @param {string} params.completedAt - ISO timestamp matching briefs.completed_at
  * @param {string} [params.episodeTitle]
  * @param {string} [params.podcastName]
  */
@@ -267,6 +269,7 @@ export async function sendBriefEmail({
   briefId,
   profileId,
   outputMarkdown,
+  completedAt,
   episodeTitle,
   podcastName,
 }) {
@@ -282,10 +285,11 @@ export async function sendBriefEmail({
     return;
   }
 
-  // 2. Idempotent insert — unique index on brief_id prevents duplicate sends
+  // 2. Idempotent insert — unique index on (brief_id, completed_at) prevents
+  //    duplicate sends for the same completion, but allows new emails on regen
   const { data: delivery, error: insertError } = await supabase
     .from("brief_email_deliveries")
-    .insert({ brief_id: briefId, profile_id: profileId, status: "queued" })
+    .insert({ brief_id: briefId, profile_id: profileId, completed_at: completedAt, status: "queued" })
     .select("id")
     .single();
   if (insertError) {

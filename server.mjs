@@ -72,13 +72,13 @@ app.get("/status", async (req, res) => {
 // omit them on failure — the row still flips to "complete" so the user isn't left hanging.
 async function completeBrief(
   briefId,
-  { outputMarkdown = null, references = null, errorLog = null } = {}
+  { outputMarkdown = null, references = null, errorLog = null, completedAt = null } = {}
 ) {
   const { error } = await supabase
     .from("briefs")
     .update({
       status: "complete",
-      completed_at: new Date().toISOString(),
+      completed_at: completedAt || new Date().toISOString(),
       ...(outputMarkdown !== null && { output_markdown: outputMarkdown }),
       ...(references !== null && { references }),
       ...(errorLog !== null && { error_log: errorLog }),
@@ -197,10 +197,12 @@ async function runPipeline(episodeUrl, profileId, briefId) {
       }));
     }
 
+    const completedAt = new Date().toISOString();
     await completeBrief(briefId, {
       outputMarkdown: finalBriefMd,
       references: referencesJson,
       errorLog: errorLog.length > 0 ? errorLog : null,
+      completedAt,
     });
 
     // Awaited but non-blocking — errors caught, don't crash pipeline
@@ -211,6 +213,7 @@ async function runPipeline(episodeUrl, profileId, briefId) {
         outputMarkdown: finalBriefMd,
         episodeTitle,
         podcastName,
+        completedAt,
       }).catch((err) => logError(`[email] Failed to send brief email for ${briefId}:`, err.message));
     }
 

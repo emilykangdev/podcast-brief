@@ -14,7 +14,7 @@ After a brief finishes generating with usable content, send the user exactly one
 
 When `runPipeline()` completes successfully with non-null `outputMarkdown`:
 1. Look up the user's email from `profiles`
-2. Atomically INSERT into `brief_email_deliveries` — unique index on `brief_id` ensures only one row per brief. If the INSERT fails (row already exists), stop. This is the idempotency guard: the database is the single source of truth.
+2. Atomically INSERT into `brief_email_deliveries` — unique index on `(brief_id, completed_at)` ensures exactly one email per brief completion. Regenerations get a new `completed_at`, so a new email is sent. Retries/crashes of the same completion are blocked by the unique constraint. Old delivery rows are preserved for audit.
 3. Convert `output_markdown` to email-safe HTML via `marked` with a custom renderer + `juice`
 4. Send via Resend with the raw markdown as a `.md` attachment (Resend natively supports `attachments: [{ filename, content }]`, max 40MB total)
 5. UPDATE the delivery row to `sent` with `provider_message_id`
@@ -131,10 +131,19 @@ Dev gets `localhost:3000` fallback. Each environment gets its own dashboard link
 Create `supabase/migrations/20260409000000_add_brief_email_unique_idx.sql`:
 
 ```sql
--- Ensure only one email delivery row per brief (idempotency guard).
-create unique index if not exists brief_email_deliveries_brief_id_uidx
-  on public.brief_email_deliveries (brief_id);
+-- Ensure exactly one email per brief completion, but allow new emails on regeneration.
+-- Each regen produces a new completed_at, so (brief_id, completed_at) is unique per generation.
+create unique index if not exists brief_email_deliveries_brief_completion_uidx
+  on public.brief_email_deliveries (brief_id, completed_at);
 ```
+
+**Why `(brief_id, completed_at)` not just `(brief_id)`:**
+- Exactly one email per completion → unique constraint prevents duplicates from retries/crashes
+- Regen gets a new `completed_at` → new row allowed → new email sent
+- Old delivery rows preserved for audit trail
+
+`sendBriefEmail()` must receive `completedAt` and include it in the INSERT.
+The `brief_email_deliveries` table needs a `completed_at` column added in the same migration.
 
 ### Task 4: Modify `libs/resend.js` — add `from` and `attachments` params, fix `@/config` import
 
