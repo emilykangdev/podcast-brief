@@ -16,7 +16,7 @@ Extract the following sections in order:
 
 **HABITS** — 10–12 practical habits mentioned or demonstrated by the speakers. Focus on habits that reveal something meaningful about how they operate — skip incidental details. Examples: routines, things they always do or avoid, recovery practices, how they handle failure.
 
-**FACTS** — 8–10 surprising or little-known facts about the world mentioned in the content. Should be verifiable claims about reality, not opinions. Exclude episode-specific details (addresses, anecdotes about specific people) — a fact should surprise someone who knows nothing about the guest or show.
+**CLAIMS** — 8–10 surprising or little-known claims about the world mentioned in the content. These should be verifiable, not opinions. Exclude episode-specific details (addresses, anecdotes about specific people) — a claim should surprise someone who knows nothing about the guest or show.
 
 **REFERENCES** — Books, films, specific places, named individuals, and creative works mentioned by the speakers. Always include named individuals (full names). Exclude generic platforms and software (TikTok, Instagram, Patreon, Spotify, etc.) unless the speaker discusses them substantively rather than just mentioning them in passing. Exclude anything that reads like a promotional plug or sponsor mention.
 
@@ -30,7 +30,7 @@ Extract the following sections in order:
 
 - Output Markdown only. No preamble, warnings, or notes.
 - Use bulleted lists (not numbered) for all sections except ONE-SENTENCE TAKEAWAY.
-- Write each bullet in IDEAS, INSIGHTS, HABITS, FACTS, and RECOMMENDATIONS as a single sentence, 14–18 words.
+- Write each bullet in IDEAS, INSIGHTS, HABITS, CLAIMS, and RECOMMENDATIONS as a single sentence, 14–18 words.
 - Do not begin two bullets with the same opening word or phrase.
 - Do not repeat the same idea across sections.
 - If a quote or idea contains a racial slur targeting a specific group, replace it with a respectful equivalent rather than removing the quote entirely. Analytical language used by speakers to describe historical tropes or systemic patterns is fine to retain as-is.
