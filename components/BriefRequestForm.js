@@ -50,6 +50,8 @@ export default function BriefRequestForm({ onSuccess }) {
         episodeUrl: url,
         durationSeconds: estimateResult.durationSeconds,
         sig: estimateResult.sig,
+        episodeTitle: estimateResult.episodeTitle,
+        podcastName: estimateResult.podcastName,
       });
       setUrl("");
       setEstimateResult(null);
