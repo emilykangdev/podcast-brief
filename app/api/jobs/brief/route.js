@@ -4,13 +4,16 @@ import adminSupabase from "@/libs/supabase/admin.mjs";
 import { MAX_EPISODE_SECONDS, creditsNeeded as calcCredits, getRegenCost } from "@/libs/credits";
 import { verifyEstimate } from "@/libs/estimate-signer";
 import { getPostHog } from "@/libs/posthog/server";
-import arcjet, { tokenBucket, detectBot } from "@arcjet/next";
+import arcjet, { shield, tokenBucket, detectBot } from "@arcjet/next";
 
-// Most sensitive endpoint — consumes credits and triggers expensive Browserbase pipeline.
-// Token bucket allows burst of 10 briefs (batch session), then 2/min sustained.
+// Single Arcjet decision for this route: shield + bot detection + rate limit.
+// Most sensitive endpoint — consumes credits and triggers expensive Browserbase
+// pipeline. Token bucket allows burst of 10 briefs (batch session), then 2/min
+// sustained.
 const aj = arcjet({
   key: process.env.ARCJET_KEY,
   rules: [
+    shield({ mode: "LIVE" }),
     tokenBucket({
       mode: "LIVE",
       refillRate: 2,   // 2 tokens per minute
@@ -96,11 +99,6 @@ async function handleRegenerate(db, user, episodeUrl) {
 
 export async function POST(req) {
   try {
-    const { episodeUrl, durationSeconds, regenerate, sig } = await req.json();
-    if (!episodeUrl) {
-      return NextResponse.json({ error: "episodeUrl required" }, { status: 400 });
-    }
-
     const authSupabase = await createClient();
     const { data: { user }, error } = await authSupabase.auth.getUser();
     if (error || !user) {
@@ -118,6 +116,11 @@ export async function POST(req) {
         { error: "Too many requests" },
         { status: 429 }
       );
+    }
+
+    const { episodeUrl, durationSeconds, regenerate, sig } = await req.json();
+    if (!episodeUrl) {
+      return NextResponse.json({ error: "episodeUrl required" }, { status: 400 });
     }
 
     // Admin client for RPC calls (service_role only)

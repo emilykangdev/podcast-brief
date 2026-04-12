@@ -243,9 +243,9 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 
 Two-layer defense using `@arcjet/next`:
 
-**Layer 1: Global shield in `middleware.js`** — OWASP Top 10 attack protection (SQLi, XSS, etc.) on all non-static routes. Fails open on Arcjet outage to avoid site-wide downtime.
+**Layer 1: Shield in `middleware.js` for pages + Stripe webhook** — OWASP Top 10 attack protection (SQLi, XSS, etc.) on non-API page routes, plus `/api/webhook/stripe`. Fails open on Arcjet errors to avoid site-wide downtime.
 
-**Layer 2: Per-route rate limiting** — tailored rules on each API endpoint:
+**Layer 2: Single-call Arcjet in selected API routes** — protected API handlers bundle `shield()` with their own tailored rules, so each request gets exactly one Arcjet decision:
 
 | Route | Algorithm | Limit | Track By | Bot Detection |
 |-------|-----------|-------|----------|---------------|
@@ -255,7 +255,8 @@ Two-layer defense using `@arcjet/next`:
 | `/api/webhook/stripe` | — | — | — | No (protected by HMAC signature + idempotent ledger) |
 
 **Design decisions:**
-- Stripe webhook has no per-route Arcjet — HMAC signature verification + idempotent ledger insert is sufficient. Rate limiting would risk dropping legitimate webhooks and triggering Stripe retry storms.
+- Most `/api/*` routes are excluded from middleware so they can run one Arcjet decision per request with `shield()` included in the route-local rules.
+- Stripe webhook is the exception: it stays on middleware shield only. HMAC signature verification + idempotent ledger insert are the primary protections there, and per-route rate limiting would risk dropping legitimate webhooks and triggering Stripe retry storms.
 - Auth callback has no bot detection — email clients (Gmail, Outlook, corporate gateways) prefetch magic link URLs, and `detectBot` would block those prefetch requests.
 - Authenticated routes (brief, estimate) track by `userId` instead of IP to avoid penalizing shared networks.
 - All rules are `LIVE` mode (blocking). Switch to `DRY_RUN` to log without blocking if false positives appear.

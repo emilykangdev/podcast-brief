@@ -3,11 +3,12 @@ import { createClient } from "@/libs/supabase/server";
 import { resolveEpisode } from "@/libs/podcast/resolve.mjs";
 import { MAX_EPISODE_SECONDS, creditsNeeded, formatDuration } from "@/libs/credits";
 import { signEstimate } from "@/libs/estimate-signer";
-import arcjet, { slidingWindow } from "@arcjet/next";
+import arcjet, { shield, slidingWindow } from "@arcjet/next";
 
 const aj = arcjet({
   key: process.env.ARCJET_KEY,
   rules: [
+    shield({ mode: "LIVE" }),
     slidingWindow({
       mode: "LIVE",
       interval: "1m",
@@ -26,6 +27,9 @@ export async function POST(req) {
   // URL experimentation without enabling scripted abuse
   const decision = await aj.protect(req, { userId: user.id });
   if (decision.isDenied()) {
+    if (!decision.reason.isRateLimit()) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     return NextResponse.json(
       { error: "Too many requests" },
       { status: 429 }
