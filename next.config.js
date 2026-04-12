@@ -23,6 +23,15 @@ const nextConfig = {
       },
     ],
   },
+  // Proxy PostHog requests through our domain to avoid ad-blocker interference.
+  // Client code uses /ingest/... which Next.js rewrites to us.i.posthog.com.
+  skipTrailingSlashRedirect: true,
+  async rewrites() {
+    return [
+      { source: "/ingest/static/:path*", destination: "https://us-assets.i.posthog.com/static/:path*" },
+      { source: "/ingest/:path*", destination: "https://us.i.posthog.com/:path*" },
+    ];
+  },
   turbopack: {
     rules: {
       "*.svg": {

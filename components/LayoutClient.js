@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/libs/supabase/client";
+import { isPostHogEnabled, posthog } from "@/libs/posthog/client";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Crisp } from "crisp-sdk-web";
@@ -48,8 +49,13 @@ const CrispChat = () => {
 
   // Add User Unique ID to Crisp to easily identify users when reaching support (optional)
   useEffect(() => {
-    if (data?.user && config?.crisp?.id) {
-      Crisp.session.setData({ userId: data.user?.id });
+    if (data?.user) {
+      if (config?.crisp?.id) {
+        Crisp.session.setData({ userId: data.user?.id });
+      }
+      if (isPostHogEnabled) {
+        posthog.identify(data.user.id, { email: data.user.email });
+      }
     }
   }, [data]);
 

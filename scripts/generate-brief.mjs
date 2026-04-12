@@ -8,6 +8,16 @@ import supabase from "../libs/supabase/admin.mjs";
 // 0 — success
 // 1 — general error (missing args, missing files, API failure, etc.)
 
+const captureAiContent = process.env.POSTHOG_CAPTURE_AI_CONTENT !== "false";
+
+function getAiContentProperties({ input, output }) {
+  if (!captureAiContent) return {};
+  return {
+    $ai_input: input,
+    $ai_output_choices: output,
+  };
+}
+
 // ── callOpenRouter ────────────────────────────────────────────────────────────
 async function callOpenRouter(system, user, { maxTokens = 16000 } = {}) {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -33,7 +43,16 @@ async function callOpenRouter(system, user, { maxTokens = 16000 } = {}) {
   const data = await res.json();
   if (!data.choices?.length)
     throw new Error(`OpenRouter returned no choices: ${JSON.stringify(data)}`);
-  return data.choices[0].message.content;
+  const messages = [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+  return {
+    content: data.choices[0].message.content,
+    usage: data.usage ?? {},
+    model: data.model ?? "unknown",
+    messages,
+  };
 }
 
 // ── chunking ──────────────────────────────────────────────────────────────────
@@ -69,16 +88,19 @@ async function extractChunk(SYSTEM, chunkText, index, total, promptAddition) {
   if (promptAddition != null) {
     userContent += `\n\nAdditional instruction: ${promptAddition}`;
   }
-  return callOpenRouter(SYSTEM, userContent);
+  const start = Date.now();
+  const result = await callOpenRouter(SYSTEM, userContent);
+  result.latency = (Date.now() - start) / 1000;
+  return result;
 }
 
-async function mergeChunks(briefs) {
-  if (briefs.length === 1) return briefs[0]; // short-circuit — no merge needed
-  console.error(`  Merging ${briefs.length} chunk briefs...`);
-  const MERGE_SYSTEM = `You are combining extract_wisdom briefs from ${briefs.length} consecutive segments of the same podcast episode into one final brief.
+async function mergeChunks(briefTexts) {
+  if (briefTexts.length === 1) return null; // short-circuit — no merge needed, caller uses chunk result
+  console.error(`  Merging ${briefTexts.length} chunk briefs...`);
+  const MERGE_SYSTEM = `You are combining extract_wisdom briefs from ${briefTexts.length} consecutive segments of the same podcast episode into one final brief.
 
 Output the same Markdown sections in this exact order:
-SUMMARY, IDEAS, INSIGHTS, QUOTES, HABITS, FACTS, REFERENCES, ONE-SENTENCE TAKEAWAY, RECOMMENDATIONS
+SUMMARY, IDEAS, INSIGHTS, QUOTES, HABITS, CLAIMS, REFERENCES, ONE-SENTENCE TAKEAWAY, RECOMMENDATIONS
 
 MERGING RULES:
 - SUMMARY: Write one unified summary covering the full episode arc, not just concatenated segment summaries.
@@ -86,14 +108,17 @@ MERGING RULES:
 - INSIGHTS: Keep the best 5-7 insights. Same deduplication rules as IDEAS.
 - QUOTES: Keep the best 10 quotes total. Prefer verbatim, punchy, standalone quotes. Drop weak or redundant ones.
 - HABITS: Keep the best 10-15 habits. Deduplicate. Prefer specific and actionable over vague.
-- FACTS: Keep all unique facts. Drop exact duplicates only.
+- CLAIMS: Keep all unique claims. Drop exact duplicates only.
 - REFERENCES: Merge into one deduplicated list. Keep all unique references.
 - ONE-SENTENCE TAKEAWAY: Write one single sentence capturing the entire episode. Do not combine segment takeaways.
 - RECOMMENDATIONS: Keep the best 10-15. Deduplicate. Prefer specific and actionable.
 
 IMPORTANT: The output should feel like it came from one coherent pass over the full episode, not like a stitched-together list. Quality over quantity in every section.`;
-  const userContent = briefs.map((b, i) => `--- Segment ${i + 1} ---\n${b}`).join("\n\n");
-  return callOpenRouter(MERGE_SYSTEM, userContent, { maxTokens: 16000 });
+  const userContent = briefTexts.map((b, i) => `--- Segment ${i + 1} ---\n${b}`).join("\n\n");
+  const start = Date.now();
+  const result = await callOpenRouter(MERGE_SYSTEM, userContent, { maxTokens: 16000 });
+  result.latency = (Date.now() - start) / 1000;
+  return result;
 }
 
 // ── main export ───────────────────────────────────────────────────────────────
@@ -105,6 +130,9 @@ export async function run({
   force = false,
   promptAddition = null,
   outputDir,
+  posthog = null,
+  traceId = null,
+  pipelineSpanId = null,
 } = {}) {
   if (!outputDir) outputDir = process.cwd();
 
@@ -147,10 +175,66 @@ export async function run({
   const chunks = chunkTranscript(transcript);
   if (chunks.length > 1) console.error(`  → ${chunks.length} chunks`);
 
-  const chunkBriefs = await Promise.all(
+  const chunkResults = await Promise.all(
     chunks.map((chunk, i) => extractChunk(SYSTEM, chunk, i, chunks.length, promptAddition))
   );
-  const brief = await mergeChunks(chunkBriefs);
+
+  // Emit $ai_generation for each chunk extraction
+  if (posthog && traceId) {
+    for (let i = 0; i < chunkResults.length; i++) {
+      const r = chunkResults[i];
+      posthog.capture({
+        distinctId: profileId,
+        event: "$ai_generation",
+        properties: {
+          $ai_trace_id: traceId,
+          $ai_span_id: randomUUID(),
+          $ai_parent_id: pipelineSpanId,
+          $ai_span_name: chunks.length > 1 ? `extract-chunk-${i + 1}` : "extract-brief",
+          $ai_model: r.model,
+          $ai_provider: "anthropic",
+          ...getAiContentProperties({
+            input: r.messages,
+            output: [{ role: "assistant", content: r.content }],
+          }),
+          $ai_input_tokens: r.usage.prompt_tokens,
+          $ai_output_tokens: r.usage.completion_tokens,
+          $ai_total_cost_usd: r.usage.cost,
+          $ai_latency: r.latency,
+          $ai_base_url: "https://openrouter.ai/api/v1",
+        },
+      });
+    }
+  }
+
+  // Merge if multi-chunk, otherwise use the single result
+  const mergeResult = await mergeChunks(chunkResults.map((r) => r.content));
+  const brief = mergeResult ? mergeResult.content : chunkResults[0].content;
+
+  // Emit $ai_generation for merge step (only if multi-chunk)
+  if (posthog && traceId && mergeResult) {
+    posthog.capture({
+      distinctId: profileId,
+      event: "$ai_generation",
+      properties: {
+        $ai_trace_id: traceId,
+        $ai_span_id: randomUUID(),
+        $ai_parent_id: pipelineSpanId,
+        $ai_span_name: "merge-chunks",
+        $ai_model: mergeResult.model,
+        $ai_provider: "anthropic",
+        ...getAiContentProperties({
+          input: mergeResult.messages,
+          output: [{ role: "assistant", content: mergeResult.content }],
+        }),
+        $ai_input_tokens: mergeResult.usage.prompt_tokens,
+        $ai_output_tokens: mergeResult.usage.completion_tokens,
+        $ai_total_cost_usd: mergeResult.usage.cost,
+        $ai_latency: mergeResult.latency,
+        $ai_base_url: "https://openrouter.ai/api/v1",
+      },
+    });
+  }
 
   // write file
   mkdirSync(outputDir, { recursive: true });

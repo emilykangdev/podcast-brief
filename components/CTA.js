@@ -17,8 +17,8 @@ const CTA = () => {
             Learn from every podcast episode with a Learning Brief
           </h2>
           <p className="text-lg opacity-80 mb-12 md:mb-16">
-            Don&apost waste time pausing for references to authors, content, figures. Get them in
-            your inbox for every podcast you listen to.
+            Don&apos;t waste time pausing for references to authors, content, figures. Get them in
+            your inbox for any episode.
           </p>
 
           <button className="btn btn-primary btn-wide">Get {config.appName}</button>
