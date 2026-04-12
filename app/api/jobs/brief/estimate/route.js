@@ -91,6 +91,7 @@ export async function POST(req) {
     creditsNeeded: needed,
     creditsRemaining: remaining,
     episodeTitle: episode.title,
+    podcastName: episode.podcastName,
     sig: signEstimate(episodeUrl, episode.durationSeconds),
   });
 }

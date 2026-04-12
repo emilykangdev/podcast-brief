@@ -13,11 +13,34 @@ import Image from "next/image";
 const features = [
   {
     title: "Learning Brief",
-    description:
-      "The Brief shows up in your inbox. Key ideas are  explained clearly, every important reference is unpacked (like books and thinkers mentioned), with reference links so you can explore further. It's a bridge between listening and learning.",
+    description: (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 text-base-content/70">
+          <span className="text-2xl">🎙️</span>
+          <span>Podcast episode</span>
+          <span className="text-xl">→</span>
+          <span className="text-2xl">📧</span>
+          <span>Email with brief + Markdown file</span>
+        </div>
+        <ul className="space-y-2">
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-0.5">•</span>
+            <span>Key ideas explained clearly, every reference unpacked with links to explore further</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-0.5">•</span>
+            <span>Markdown file attached — paste straight into Obsidian, Notion, or your favorite notes app</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-0.5">•</span>
+            <span>Dashboard to see all your briefs at once — download everything as a zip file organized by podcast</span>
+          </li>
+        </ul>
+      </div>
+    ),
     type: "video",
-    path: "https://d3m8mk7e1mf7xn.cloudfront.net/app/newsletter.webm",
-    format: "video/webm",
+    path: "/podcastbrief-demo.mp4",
+    format: "video/mp4",
     svg: (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -62,7 +85,7 @@ const Item = ({ feature, isOpen, setFeatureSelected }) => {
         className={`transition-all duration-300 ease-in-out text-base-content-secondary overflow-hidden`}
         style={
           isOpen
-            ? { maxHeight: accordion?.current?.scrollHeight, opacity: 1 }
+            ? { maxHeight: "none", opacity: 1 }
             : { maxHeight: 0, opacity: 0 }
         }
       >
@@ -76,7 +99,7 @@ const Item = ({ feature, isOpen, setFeatureSelected }) => {
 // Video are set to autoplay for best UX.
 const Media = ({ feature }) => {
   const { type, path, format, alt } = feature;
-  const style = "rounded-2xl aspect-square w-full sm:w-[26rem]";
+  const style = "rounded-2xl aspect-square w-full sm:w-[34rem]";
   const size = {
     width: 500,
     height: 500,
@@ -124,7 +147,7 @@ const FeaturesAccordion = () => {
     >
       <div className="px-8">
         <h2 className="font-extrabold text-4xl lg:text-6xl tracking-tight mb-12 md:mb-24">
-          All you need to better, faster notes
+          All you need to make better, faster notes
           <span className="bg-neutral text-neutral-content px-2 md:px-4 ml-1 md:ml-1.5 leading-relaxed whitespace-nowrap">
             about every podcast episode
           </span>

@@ -10,7 +10,7 @@ export default async function Dashboard() {
 
   const { data: briefs } = await supabase
     .from("briefs")
-    .select("id, input_url, output_markdown, status, podcast_name, episode_title, created_at, completed_at, regeneration_count, error_log, credits_charged")
+    .select("id, input_url, output_markdown, status, podcast_name, episode_title, created_at, completed_at, regeneration_count, error_log, credits_charged, brief_email_deliveries(status, completed_at)")
     .eq("profile_id", user.id)
     .eq("environment", process.env.APP_ENV || "DEVELOPMENT")
     .order("created_at", { ascending: false });
