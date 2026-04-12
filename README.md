@@ -138,9 +138,9 @@ New users get **3 free credits** on signup.
    → creditsNeeded = Math.ceil(durationSeconds / 3600)
    → checks: >4h cap? insufficient credits?
    → signs HMAC(episodeUrl|durationSeconds) with STRIPE_SECRET_KEY
-   → returns { durationSeconds, creditsNeeded, creditsRemaining, episodeTitle, sig }
+   → returns { durationSeconds, creditsNeeded, creditsRemaining, episodeTitle, podcastName, sig }
 
-2. POST /api/jobs/brief { episodeUrl, durationSeconds, sig }
+2. POST /api/jobs/brief { episodeUrl, durationSeconds, sig, episodeTitle, podcastName }
    → validates durationSeconds: integer, > 0, ≤ 4h
    → verifies HMAC sig matches (episodeUrl + durationSeconds) — rejects if tampered
    → calls consume_credits_and_queue_brief() Postgres RPC
@@ -192,7 +192,7 @@ Episodes longer than 4 hours are rejected at the estimate endpoint with a friend
 - **`GET /billing`** — Credit balance + purchase/usage history. Auth-guarded. Shows humanized credit history (episode titles, durations, purchase amounts) with post-transaction balance snapshots. CSV export. "Buy More Credits" opens `CreditPackModal` (shared component — also used for insufficient-credits prompts on brief submission and regeneration).
 
 ### API
-- **`POST /api/jobs/brief/estimate`** — Episode duration lookup + credit cost preview. Returns `{ durationSeconds, creditsNeeded, creditsRemaining, episodeTitle, sig }`.
+- **`POST /api/jobs/brief/estimate`** — Episode duration lookup + credit cost preview. Returns `{ durationSeconds, creditsNeeded, creditsRemaining, episodeTitle, podcastName, sig }`.
 - **`POST /api/jobs/brief`** — Atomic credit deduction + brief queueing via Postgres RPC. Also handles regeneration (`{ regenerate: true }`).
 - **`POST /api/stripe/create-checkout`** — Creates Stripe Embedded Checkout session. Validates priceId against config, requires auth, rejects subscription mode.
 - **`POST /api/webhook/stripe`** — Stripe webhook. Idempotent credit accounting via insert-first pattern.
@@ -202,7 +202,7 @@ Episodes longer than 4 hours are rejected at the estimate endpoint with a friend
 The dashboard (`/dashboard`) is a server component that fetches briefs from Supabase and passes them to a client component (`DashboardClient`).
 
 **Features:**
-- **Brief list** — cards showing episode title, podcast name, status badge, and date. Newest first. In-progress briefs are muted (opacity-50) with "Queued" or "Generating" badges.
+- **Brief list** — cards showing episode title, podcast name, email-sent icon, status badge, and date. Newest first. In-progress briefs are muted (opacity-50) with "Queued" or "Generating" badges.
 - **Auto-polling** — refreshes every 60s while any brief is in-progress. Stops when all are complete.
 - **Brief modal** — click a card to view the full brief rendered as markdown. Includes copy-to-clipboard (raw markdown) and regenerate button.
 - **Download All** — zips all completed briefs as `.md` files organized into folders by podcast name. Client-side via JSZip.

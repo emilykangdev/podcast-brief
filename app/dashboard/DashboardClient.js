@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import JSZip from "jszip";
 import apiClient from "@/libs/api";
+import { Mail } from "lucide-react";
 import BriefRequestForm from "@/components/BriefRequestForm";
 import BriefModal from "@/components/BriefModal";
 import CreditBalance from "@/components/CreditBalance";
@@ -134,6 +135,10 @@ export default function DashboardClient({ briefs, credits, userEmail }) {
 
 function BriefCard({ brief, onClick }) {
   const isInProgress = brief.status === "queued" || brief.status === "generating";
+  const emailSent = brief.status === "complete" && brief.completed_at && brief.brief_email_deliveries?.some((delivery) => {
+    if (delivery.status !== "sent" && delivery.status !== "delivered") return false;
+    return sameTimestamp(delivery.completed_at, brief.completed_at);
+  });
   return (
     <div className={`card bg-base-200 cursor-pointer hover:bg-base-300 transition-colors ${isInProgress ? "opacity-50" : ""}`}
          onClick={onClick}>
@@ -147,6 +152,11 @@ function BriefCard({ brief, onClick }) {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {emailSent && (
+            <div className="tooltip" data-tip="Email sent. Please check spam if you don't see it in your inbox.">
+              <Mail className="w-4 h-4 text-base-content/60" />
+            </div>
+          )}
           <StatusBadge status={brief.status} hasContent={!!brief.output_markdown} />
           <span className="text-sm text-base-content/40">
             {new Date(brief.created_at).toLocaleDateString()}
@@ -166,6 +176,12 @@ function StatusBadge({ status, hasContent }) {
   // error_log is for developer diagnostics (check Supabase), not user-facing status.
   if (!hasContent) return <span className="badge badge-sm badge-error">Failed</span>;
   return <span className="badge badge-sm badge-success">Complete</span>;
+}
+
+function sameTimestamp(a, b) {
+  const aTime = new Date(a).getTime();
+  const bTime = new Date(b).getTime();
+  return Number.isFinite(aTime) && Number.isFinite(bTime) && aTime === bTime;
 }
 
 function sanitizeFilename(name) {

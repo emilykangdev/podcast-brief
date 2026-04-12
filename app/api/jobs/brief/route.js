@@ -79,7 +79,7 @@ async function handleRegenerate(db, user, episodeUrl) {
 
 export async function POST(req) {
   try {
-    const { episodeUrl, durationSeconds, regenerate, sig } = await req.json();
+    const { episodeUrl, durationSeconds, regenerate, sig, episodeTitle, podcastName } = await req.json();
     if (!episodeUrl) {
       return NextResponse.json({ error: "episodeUrl required" }, { status: 400 });
     }
@@ -150,6 +150,24 @@ export async function POST(req) {
       return NextResponse.json({ error: "Failed to queue brief" }, { status: 500 });
     }
 
+    // Write episode metadata so dashboard shows it immediately while queued.
+    // Non-critical — the worker overwrites these fields after transcribe.
+    if (episodeTitle || podcastName) {
+      try {
+        const { error: metadataError } = await db
+          .from("briefs")
+          .update({ episode_title: episodeTitle || null, podcast_name: podcastName || null })
+          .eq("id", result.brief_id)
+          .eq("profile_id", user.id)
+          .eq("environment", APP_ENV);
+
+        if (metadataError) {
+          console.error("Non-critical: failed to write episode metadata:", metadataError.message);
+        }
+      } catch (metaErr) {
+        console.error("Non-critical: failed to write episode metadata:", metaErr.message);
+      }
+    }
     const posthog = getPostHog();
     posthog?.capture({
       distinctId: user.id,
