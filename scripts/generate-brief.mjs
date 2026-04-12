@@ -8,6 +8,16 @@ import supabase from "../libs/supabase/admin.mjs";
 // 0 — success
 // 1 — general error (missing args, missing files, API failure, etc.)
 
+const captureAiContent = process.env.POSTHOG_CAPTURE_AI_CONTENT !== "false";
+
+function getAiContentProperties({ input, output }) {
+  if (!captureAiContent) return {};
+  return {
+    $ai_input: input,
+    $ai_output_choices: output,
+  };
+}
+
 // ── callOpenRouter ────────────────────────────────────────────────────────────
 async function callOpenRouter(system, user, { maxTokens = 16000 } = {}) {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -183,8 +193,10 @@ export async function run({
           $ai_span_name: chunks.length > 1 ? `extract-chunk-${i + 1}` : "extract-brief",
           $ai_model: r.model,
           $ai_provider: "anthropic",
-          $ai_input: r.messages,
-          $ai_output_choices: [{ role: "assistant", content: r.content }],
+          ...getAiContentProperties({
+            input: r.messages,
+            output: [{ role: "assistant", content: r.content }],
+          }),
           $ai_input_tokens: r.usage.prompt_tokens,
           $ai_output_tokens: r.usage.completion_tokens,
           $ai_total_cost_usd: r.usage.cost,
@@ -211,8 +223,10 @@ export async function run({
         $ai_span_name: "merge-chunks",
         $ai_model: mergeResult.model,
         $ai_provider: "anthropic",
-        $ai_input: mergeResult.messages,
-        $ai_output_choices: [{ role: "assistant", content: mergeResult.content }],
+        ...getAiContentProperties({
+          input: mergeResult.messages,
+          output: [{ role: "assistant", content: mergeResult.content }],
+        }),
         $ai_input_tokens: mergeResult.usage.prompt_tokens,
         $ai_output_tokens: mergeResult.usage.completion_tokens,
         $ai_total_cost_usd: mergeResult.usage.cost,

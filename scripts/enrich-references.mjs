@@ -4,6 +4,16 @@ import { randomUUID } from "crypto";
 import Exa from "exa-js";
 import { extractSection } from "./markdown.mjs";
 
+const captureAiContent = process.env.POSTHOG_CAPTURE_AI_CONTENT !== "false";
+
+function getAiContentProperties({ input, output }) {
+  if (!captureAiContent) return {};
+  return {
+    $ai_input: input,
+    $ai_output_choices: output,
+  };
+}
+
 // ── parse references from extract_wisdom markdown ─────────────────────────────
 function parseReferences(markdown) {
   const section = extractSection(markdown, "REFERENCES");
@@ -68,8 +78,10 @@ Return JSON only: { "refs": [{ "name": "display name", "query": "exa search quer
         $ai_span_name: "enrich-references",
         $ai_model: data.model ?? "google/gemini-2.5-flash",
         $ai_provider: "google",
-        $ai_input: enrichMessages,
-        $ai_output_choices: [{ role: "assistant", content: data.choices?.[0]?.message?.content }],
+        ...getAiContentProperties({
+          input: enrichMessages,
+          output: [{ role: "assistant", content: data.choices?.[0]?.message?.content }],
+        }),
         $ai_input_tokens: data.usage?.prompt_tokens,
         $ai_output_tokens: data.usage?.completion_tokens,
         $ai_total_cost_usd: data.usage?.cost,
