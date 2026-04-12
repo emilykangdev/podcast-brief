@@ -137,7 +137,7 @@ We may update these Terms from time to time. If material changes are made, users
 If you have any questions regarding these Terms, please contact:
 
 PodcastBrief
-Email: podcastbrief.support@gmail.com`}
+Email: podcastbrief@emilykang.dev`}
         </pre>
       </div>
     </main>
