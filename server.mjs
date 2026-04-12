@@ -232,9 +232,28 @@ async function runPipeline(episodeUrl, profileId, briefId) {
     logError(`[pipeline error] ${err.message}`);
     errorLog.push({ step: "unrecoverable", error: err.message, stack: err.stack });
 
-    await completeBrief(briefId, { errorLog }).catch((e) =>
+    const errorCompletedAt = new Date().toISOString();
+    await completeBrief(briefId, { errorLog, completedAt: errorCompletedAt }).catch((e) =>
       logError("[cleanup] Failed to update brief status:", e.message)
     );
+
+    // Still send the email if the brief has usable content (written mid-pipeline as crash insurance)
+    const { data: partialBrief } = await supabase
+      .from("briefs")
+      .select("output_markdown, podcast_name, episode_title")
+      .eq("id", briefId)
+      .single();
+    if (partialBrief?.output_markdown) {
+      await sendBriefEmail({
+        briefId,
+        profileId,
+        outputMarkdown: partialBrief.output_markdown,
+        completedAt: errorCompletedAt,
+        episodeTitle: partialBrief.episode_title,
+        podcastName: partialBrief.podcast_name,
+      }).catch((emailErr) => logError(`[email] Failed to send brief email for ${briefId}:`, emailErr.message));
+    }
+
     await alertDeveloper({ briefId, jobId, error: err.message, episodeUrl, context: errorLog });
   } finally {
     await rm(jobDir, { recursive: true, force: true }).catch((e) =>
