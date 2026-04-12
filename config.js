@@ -5,7 +5,7 @@ const config = {
   appDescription:
     "PodcastBrief turns podcast episodes into clear learning briefs with key ideas, books, and references explained so you can actually learn from what you listen to.",
   // REQUIRED (no https://, not trialing slash at the end, just the naked domain)
-  domainName: "not-yet",
+  domainName: process.env.NEXT_PUBLIC_DOMAIN_NAME || "localhost:3000",
   crisp: {
     // Crisp website ID. IF YOU DON'T USE CRISP: just remove this => Then add a support email in this config file (resend.supportEmail) otherwise customer support won't work.
     id: "",
@@ -66,11 +66,11 @@ const config = {
   },
   resend: {
     // REQUIRED — Email 'From' field to be used when sending magic login links -- NOT USING FOR MVP March 6th
-    fromNoReply: `PodcastBrief <podcastbrief.support@gmail.com>`,
+    fromNoReply: `PodcastBrief <podcastbrief.noreply@emilykang.dev>`,
     // REQUIRED — Email 'From' field to be used when sending other emails, like abandoned carts, updates etc..
-    fromAdmin: `Emily at PodcastBrief <podcastbrief.support@gmail.com>`,
+    fromAdmin: `Emily at PodcastBrief <podcastbrief@emilykang.dev>`,
     // Email shown to customer if need support. Leave empty if not needed => if empty, set up Crisp above, otherwise you won't be able to offer customer support."
-    supportEmail: "podcastbrief.support@gmail.com",
+    supportEmail: "podcastbrief@emilykang.dev",
   },
   colors: {
     // REQUIRED — The DaisyUI theme to use (added to the main layout.js). Leave blank for default (light & dark mode).

@@ -16,3 +16,9 @@ Complete implementation plans live in `tmp/done-plans/`. When working on a new p
 - **Client API calls:** Use `apiClient` from `libs/api.js` for all frontend fetch calls. Never use raw `fetch()` in client components — `apiClient` provides automatic 401 redirect, toast errors, and centralized response handling.
 - **Brief status lifecycle:** `queued → generating → complete`. A brief must always reach `complete`. Failed briefs get `error_log` populated.
 - **Single worker constraint:** Browserbase free tier allows 1 concurrent session. Jobs are processed one at a time via Supabase polling, not an in-memory queue.
+- **`.mjs` vs `.js` — two module worlds, never cross them:**
+  - `.js` files (Next.js code): Use ESM syntax (`import`/`export`) but rely on Next.js to transpile them. They run on Vercel.
+  - `.mjs` files (worker/script code): Real ESM, run with plain `node server.mjs` on Railway (Node 18). No transpiler.
+  - **NEVER import a `.js` file from a `.mjs` file.** Node 18 treats `.js` as CommonJS (no `"type": "module"` in package.json), so ESM syntax in `.js` files causes a crash under plain Node. If worker code needs something from a `.js` file, either duplicate the value inline or create a shared `.mjs` module.
+  - Importing `.mjs` from `.js` is fine — Next.js handles it. The dangerous direction is `.mjs` → `.js`.
+  - Shared code used by both worlds must be in `.mjs` files (e.g., `libs/supabase/admin.mjs`, `libs/url.mjs`).

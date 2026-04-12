@@ -222,6 +222,8 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 - **Browserbase free tier: 1 concurrent session.** Pipeline jobs are queued and processed one at a time.
 - **Supabase is the queue.** No in-memory state. Worker polls for `status='queued'` rows.
 - **Pipeline always completes.** Failed briefs get `status='complete'` with `error_log` populated. Users are never left hanging.
+- **`.mjs` vs `.js` — don't cross the streams.** `.mjs` = universal, both Next.js and Node can use it, put shared code here. `.js` = Next.js only, worker code must never import it. Only one dangerous direction: `.mjs` → `.js` (crashes on Railway because Node 18 treats `.js` as CommonJS but they contain ESM syntax).
+- **Email on completion.** After `completeBrief()` succeeds with non-null `output_markdown`, the worker sends the user an email with the brief rendered as HTML and the raw markdown attached as a `.md` file. Idempotency is enforced by a unique index on `brief_email_deliveries.brief_id`. Email is currently awaited inline in `runPipeline()` (errors caught, non-blocking). In the future, true fire-and-forget with a separate email worker would be better and ideal if this actually gets any customers.
 
 ## Infrastructure
 
@@ -246,12 +248,15 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 - `STRIPE_WEBHOOK_SECRET` — Stripe webhook signing secret (server-only, for verifying webhook payloads)
 - `NEXT_PUBLIC_STRIPE_PRICE_5_CREDITS`, `NEXT_PUBLIC_STRIPE_PRICE_15_CREDITS`, `NEXT_PUBLIC_STRIPE_PRICE_50_CREDITS` — Stripe price IDs for the 3 credit packs. `NEXT_PUBLIC_` prefix required because config.js is imported by client components (price IDs are not secrets — visible in checkout URLs). Set per environment (test-mode for Preview, live-mode for Production).
 - `APP_ENV` — `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Written to `briefs.environment` at submission time.
+- `NEXT_PUBLIC_DOMAIN_NAME` — Naked domain for the app (e.g. `podcast-brief.vercel.app`). Used for dashboard links in emails and SEO. Falls back to `localhost:3000` in dev.
 
 ### Railway (Worker)
 - `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY` — Supabase admin client
 - `APP_ENV` — `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Must match Vercel's value for the corresponding environment. Worker only polls briefs where `environment = APP_ENV`.
 - `DEEPGRAM_API_KEY`, `OPENROUTER_API_KEY`, `EXA_API_KEY` — pipeline APIs
 - `BROWSERBASE_API_KEY`, `BROWSERBASE_PROJECT_ID` — headless browser
+- `RESEND_API_KEY` — Resend email API key (for brief completion emails)
+- `NEXT_PUBLIC_DOMAIN_NAME` — Same value as Vercel. Used for dashboard links in emails.
 - `WEBHOOK_URL` — developer error alert endpoint (optional)
 
 Note: Vercel and Railway both use `SUPABASE_SECRET_KEY` but for different purposes — Vercel for API route credit RPCs, Railway for worker brief processing. They still communicate only through Supabase (no direct HTTP calls between them).
@@ -409,7 +414,9 @@ The `error_log` column is a jsonb array. Each entry has a `step` field and conte
 
 ### Key invariants
 
-- **A brief never stays stuck.** The catch block in `runPipeline()` always calls `completeBrief()`. On worker crash, periodic recovery (every 5 min) resets `generating` rows older than `STALE_JOB_TIMEOUT_MS` (currently 20 min) back to `queued`.
+- **A brief never stays stuck (self-healing).** Two layers of protection:
+  1. **Normal errors** (Browserbase 429, Deepgram timeout, etc.): the `catch` block in `runPipeline()` calls `completeBrief()` immediately → status flips to `complete` → email sent if content exists.
+  2. **Worker crash** (Railway kills the container mid-pipeline, OOM, deploy): `catch` never runs, so the brief stays at `generating`. Stale job recovery runs every 5 min and resets `generating` rows older than 20 min (`STALE_JOB_TIMEOUT_MS`) back to `queued`. The pipeline re-runs on the next poll cycle. During those ≤20 min, the user sees "Generating" with readable content if step 2 already wrote `output_markdown` — this is temporary and self-heals.
 - **Stale job timeout must exceed max pipeline duration.** If a legit job takes longer than `STALE_JOB_TIMEOUT_MS` (20 min, `server.mjs:17`), recovery could reset it to `queued` while it's still running. This is safe: there's only one worker per environment, and `isProcessing` prevents it from picking up the re-queued row. When the original run finishes, `completeBrief` overwrites the status back to `complete`. No double processing. The 20-minute threshold has wide margin over the typical 2-5 minute pipeline. If long episodes (3h+) start hitting this, increase the timeout.
 - **`output_markdown` can exist while `status='generating'`.** Written mid-pipeline as crash insurance. The dashboard shows it with a "Generating" badge.
 - **Badge = has content, not error_log.** Green "Complete" if `output_markdown` exists, red "Failed" if null. `error_log` is developer-only (check Supabase). A brief with content is always "Complete" to the user, even if the pipeline had internal retries or Browserbase failures.
