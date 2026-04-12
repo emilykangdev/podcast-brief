@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export async function updateSession(request) {
   // Skip auth refresh for API routes that don't need authentication
   const { pathname } = request.nextUrl;
-  const skipAuthRoutes = ["/api/webhook", "/api/lead"];
+  const skipAuthRoutes = ["/api/webhook"];
 
   if (skipAuthRoutes.some((route) => pathname.startsWith(route))) {
     return NextResponse.next({

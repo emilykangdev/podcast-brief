@@ -5,6 +5,8 @@ import { randomUUID } from "crypto";
 import { writeFileSync } from "fs";
 import { mkdir, rm } from "fs/promises";
 import supabase from "./libs/supabase/admin.mjs";
+import { setupExpressErrorHandler } from "posthog-node";
+import { getPostHog } from "./libs/posthog/server.mjs";
 import { run as transcribe } from "./scripts/transcribe.mjs";
 import { run as generateBrief } from "./scripts/generate-brief.mjs";
 import { run as enrichReferences } from "./scripts/enrich-references.mjs";
@@ -12,6 +14,7 @@ import { run as validateReferences } from "./scripts/validate-references.mjs";
 import { run as mergeReferences } from "./scripts/merge-references.mjs";
 import { briefHasAllSections, briefHasReferences } from "./scripts/validate_pipeline.mjs";
 import { cleanUrl } from "./libs/url.mjs";
+import { sendBriefEmail } from "./libs/email/briefEmail.mjs";
 
 const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
 const STALE_JOB_TIMEOUT_MS = 20 * 60 * 1000;
@@ -33,8 +36,11 @@ const RETRY_PROMPTS = {
   noReferences:
     "Ensure the brief includes a REFERENCES section with at least one real, citable reference mentioned in the episode. Do not hallucinate references.",
   missingSections:
-    "Ensure the brief includes all required sections (SUMMARY, IDEAS, INSIGHTS, QUOTES, HABITS, FACTS, REFERENCES, ONE-SENTENCE TAKEAWAY, RECOMMENDATIONS) with substantive content in each.",
+    "Ensure the brief includes all required sections (SUMMARY, IDEAS, INSIGHTS, QUOTES, HABITS, CLAIMS, REFERENCES, ONE-SENTENCE TAKEAWAY, RECOMMENDATIONS) with substantive content in each.",
 };
+
+const posthog = getPostHog();
+log(`[posthog] initialized: ${posthog !== null}`);
 
 const app = express();
 app.use(express.json());
@@ -67,17 +73,21 @@ app.get("/status", async (req, res) => {
   });
 });
 
+// Catches Express-level errors (malformed JSON, auth failures, etc.)
+// Pipeline errors are fire-and-forget so they're caught in runPipeline's catch block instead.
+if (posthog) setupExpressErrorHandler(posthog, app);
+
 // Closes out a brief row regardless of outcome. Pass output_markdown + references on success;
 // omit them on failure — the row still flips to "complete" so the user isn't left hanging.
 async function completeBrief(
   briefId,
-  { outputMarkdown = null, references = null, errorLog = null } = {}
+  { outputMarkdown = null, references = null, errorLog = null, completedAt = null } = {}
 ) {
   const { error } = await supabase
     .from("briefs")
     .update({
       status: "complete",
-      completed_at: new Date().toISOString(),
+      completed_at: completedAt || new Date().toISOString(),
       ...(outputMarkdown !== null && { output_markdown: outputMarkdown }),
       ...(references !== null && { references }),
       ...(errorLog !== null && { error_log: errorLog }),
@@ -116,6 +126,7 @@ async function generateBriefWithValidation({
   briefId,
   outputDir,
   errorLog,
+  posthogCtx,
 }) {
   let { outputPath, outputMd } = await generateBrief({
     transcriptId,
@@ -123,6 +134,7 @@ async function generateBriefWithValidation({
     profileId,
     briefId,
     outputDir,
+    ...posthogCtx,
   });
 
   const sectionsCheck = briefHasAllSections(outputMd);
@@ -144,6 +156,7 @@ async function generateBriefWithValidation({
     force: true,
     promptAddition,
     outputDir,
+    ...posthogCtx,
   }));
 
   const refsCheck2 = briefHasReferences(outputMd);
@@ -158,12 +171,22 @@ async function generateBriefWithValidation({
 
 async function runPipeline(episodeUrl, profileId, briefId) {
   const jobId = randomUUID();
+  const traceId = randomUUID();
+  const pipelineSpanId = randomUUID();
+  const pipelineStart = Date.now();
   const jobDir = path.join(os.tmpdir(), `podcast-brief-${jobId}`);
   await mkdir(jobDir, { recursive: true });
   const errorLog = [];
+  const posthogCtx = { posthog, traceId, pipelineSpanId };
 
   try {
-    const { episodeId, transcriptPath } = await transcribe(episodeUrl, { outputDir: jobDir });
+    const { episodeId, transcriptPath, podcastName, episodeTitle } = await transcribe(episodeUrl, { outputDir: jobDir });
+
+    const { error: metaError } = await supabase
+      .from("briefs")
+      .update({ podcast_name: podcastName, episode_title: episodeTitle })
+      .eq("id", briefId);
+    if (metaError) logError(`[metadata] Failed to save episode metadata for brief ${briefId}:`, metaError.message);
 
     const { outputPath, outputMd } = await generateBriefWithValidation({
       transcriptId: episodeId,
@@ -172,9 +195,14 @@ async function runPipeline(episodeUrl, profileId, briefId) {
       briefId,
       outputDir: jobDir,
       errorLog,
+      posthogCtx,
     });
 
-    const { referencesJsonPath } = await enrichReferences(outputPath, { outputDir: jobDir });
+    const { referencesJsonPath } = await enrichReferences(outputPath, {
+      outputDir: jobDir,
+      profileId,
+      ...posthogCtx,
+    });
 
     let finalBriefMd = outputMd;
     let referencesJson = null;
@@ -190,11 +218,25 @@ async function runPipeline(episodeUrl, profileId, briefId) {
       }));
     }
 
+    const completedAt = new Date().toISOString();
     await completeBrief(briefId, {
       outputMarkdown: finalBriefMd,
       references: referencesJson,
       errorLog: errorLog.length > 0 ? errorLog : null,
+      completedAt,
     });
+
+    // Awaited but non-blocking — errors caught, don't crash pipeline
+    if (finalBriefMd) {
+      await sendBriefEmail({
+        briefId,
+        profileId,
+        outputMarkdown: finalBriefMd,
+        episodeTitle,
+        podcastName,
+        completedAt,
+      }).catch((err) => logError(`[email] Failed to send brief email for ${briefId}:`, err.message));
+    }
 
     if (errorLog.length > 0) {
       await alertDeveloper({
@@ -206,14 +248,58 @@ async function runPipeline(episodeUrl, profileId, briefId) {
       });
     }
 
+    posthog?.capture({
+      distinctId: profileId,
+      event: "$ai_span",
+      properties: {
+        $ai_trace_id: traceId,
+        $ai_span_id: pipelineSpanId,
+        $ai_span_name: "brief-pipeline",
+        $ai_latency: (Date.now() - pipelineStart) / 1000,
+        $ai_is_error: errorLog.length > 0,
+        $ai_input_state: { episodeUrl },
+        $ai_output_state: { briefId },
+      },
+    });
+    if (posthog) {
+      log(`[posthog] flushing ${traceId}`);
+      await posthog.flush().catch((e) => logError(`[posthog] flush failed: ${e.message}`));
+      log(`[posthog] flushed`);
+    }
+
     log(`[pipeline] complete [job=${jobId}]${errorLog.length > 0 ? " (degraded)" : ""}`);
   } catch (err) {
     logError(`[pipeline error] ${err.message}`);
     errorLog.push({ step: "unrecoverable", error: err.message, stack: err.stack });
+    posthog?.captureException(err, profileId, {
+      briefId,
+      jobId,
+      episodeUrl,
+      pipeline_step: errorLog[errorLog.length - 1]?.step ?? "unknown",
+    });
 
-    await completeBrief(briefId, { errorLog }).catch((e) =>
+    const errorCompletedAt = new Date().toISOString();
+    await completeBrief(briefId, { errorLog, completedAt: errorCompletedAt }).catch((e) =>
       logError("[cleanup] Failed to update brief status:", e.message)
     );
+
+    // Still send the email if the brief has usable content (written mid-pipeline as crash insurance)
+    const { data: partialBrief } = await supabase
+      .from("briefs")
+      .select("output_markdown, podcast_name, episode_title")
+      .eq("id", briefId)
+      .single();
+    if (partialBrief?.output_markdown) {
+      await sendBriefEmail({
+        briefId,
+        profileId,
+        outputMarkdown: partialBrief.output_markdown,
+        completedAt: errorCompletedAt,
+        episodeTitle: partialBrief.episode_title,
+        podcastName: partialBrief.podcast_name,
+      }).catch((emailErr) => logError(`[email] Failed to send brief email for ${briefId}:`, emailErr.message));
+    }
+
     await alertDeveloper({ briefId, jobId, error: err.message, episodeUrl, context: errorLog });
   } finally {
     await rm(jobDir, { recursive: true, force: true }).catch((e) =>
@@ -224,19 +310,24 @@ async function runPipeline(episodeUrl, profileId, briefId) {
 
 // ── Supabase polling ──────────────────────────────────────────────────────────
 
+// Reset stale generating jobs back to queued. Does NOT filter on output_markdown —
+// a row with partial content that never got completeBrief()'d is still stuck.
+// Re-running the pipeline will overwrite the partial content with the full result.
 async function recoverStaleJobs() {
-  const { data, error } = await supabase
+  let query = supabase
     .from("briefs")
     .update({ status: "queued", started_at: null })
     .eq("status", "generating")
     .eq("environment", APP_ENV)
-    .lt("started_at", new Date(Date.now() - STALE_JOB_TIMEOUT_MS).toISOString())
-    .select("id");
+    .lt("started_at", new Date(Date.now() - STALE_JOB_TIMEOUT_MS).toISOString());
+  if (currentJobId) query = query.neq("id", currentJobId);
+  const { data, error } = await query.select("id");
   if (error) logError(`[recovery] Error recovering stale jobs: ${error.message}`);
   if (data?.length) log(`[recovery] Reset ${data.length} stale generating job(s) to queued`);
 }
 
 let isProcessing = false;
+let currentJobId = null;
 
 async function pollForWork() {
   if (isProcessing) return;
@@ -265,10 +356,12 @@ async function pollForWork() {
 
     if (!claimed?.length) return; // another worker claimed it
 
+    currentJobId = claimed[0].id;
     await runPipeline(claimed[0].input_url, claimed[0].profile_id, claimed[0].id);
   } catch (err) {
     logError(`[pipeline error] ${err.message}`);
   } finally {
+    currentJobId = null;
     isProcessing = false;
   }
 
@@ -276,10 +369,22 @@ async function pollForWork() {
   setTimeout(pollForWork, 0);
 }
 
+// Run stale job recovery every 5 minutes — not just on boot.
+// Railway blue-green deploys can kill the old container mid-pipeline, leaving
+// briefs stuck at "generating". The startup recovery misses them if they're
+// too fresh (<20min). Periodic recovery catches them on the next pass.
+const RECOVERY_INTERVAL_MS = 5 * 60 * 1000;
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, async () => {
   log(`Worker listening on port ${PORT} (env: ${APP_ENV})`);
   await recoverStaleJobs();
+  setInterval(recoverStaleJobs, RECOVERY_INTERVAL_MS);
   setInterval(pollForWork, POLL_INTERVAL_MS);
   pollForWork(); // check immediately on boot
+});
+
+process.on("SIGTERM", async () => {
+  await posthog?.shutdown();
+  process.exit(0);
 });

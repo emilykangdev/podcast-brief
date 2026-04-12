@@ -1,7 +1,18 @@
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import path from "path";
+import { randomUUID } from "crypto";
 import Exa from "exa-js";
 import { extractSection } from "./markdown.mjs";
+
+const captureAiContent = process.env.POSTHOG_CAPTURE_AI_CONTENT !== "false";
+
+function getAiContentProperties({ input, output }) {
+  if (!captureAiContent) return {};
+  return {
+    $ai_input: input,
+    $ai_output_choices: output,
+  };
+}
 
 // ── parse references from extract_wisdom markdown ─────────────────────────────
 function parseReferences(markdown) {
@@ -16,8 +27,25 @@ function parseReferences(markdown) {
 
 // ── AI normalize ─────────────────────────────────────────────────────────────
 // Keeps ALL references — fixes typos, makes names specific, and generates search queries.
-async function filterAndNormalize(names) {
+async function filterAndNormalize(names, { posthog = null, profileId = null, traceId = null, pipelineSpanId = null } = {}) {
   if (names.length === 0) return [];
+  const enrichMessages = [
+    {
+      role: "system",
+      content: `You are cleaning up a list of podcast references for web lookup.
+Keep ALL references — every person, organization, court case, book, paper, study, tool, concept, or company. Do NOT filter anything out. The user wants a complete list so they can look up anyone or anything mentioned.
+For each reference: fix any typos, make the name more specific, then write a targeted search query.
+   Examples:
+   - "Cantral ladder happiness measurement scale" → name: "Cantril Ladder", query: "Cantril Ladder happiness scale psychology"
+   - "The French luck philosopher's four quadrants" → name: "Richard Wiseman", query: "Richard Wiseman luck four quadrants book"
+   - "Josef Pieper's book Leisure, The Basis of Culture" → name: "Leisure, The Basis of Culture by Josef Pieper", query: "Josef Pieper Leisure The Basis of Culture book"
+   - "Erin Murphy" → name: "Erin Murphy", query: "Erin Murphy law professor DNA privacy"
+   If unsure of missing details, keep the query close to the original — do NOT invent facts.
+Return JSON only: { "refs": [{ "name": "display name", "query": "exa search query" }] }`,
+    },
+    { role: "user", content: JSON.stringify(names) },
+  ];
+  const start = Date.now();
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -29,22 +57,7 @@ async function filterAndNormalize(names) {
       response_format: { type: "json_object" },
       max_tokens: 2000,
       temperature: 0.2,
-      messages: [
-        {
-          role: "system",
-          content: `You are cleaning up a list of podcast references for web lookup.
-Keep ALL references — every person, organization, court case, book, paper, study, tool, concept, or company. Do NOT filter anything out. The user wants a complete list so they can look up anyone or anything mentioned.
-For each reference: fix any typos, make the name more specific, then write a targeted search query.
-   Examples:
-   - "Cantral ladder happiness measurement scale" → name: "Cantril Ladder", query: "Cantril Ladder happiness scale psychology"
-   - "The French luck philosopher's four quadrants" → name: "Richard Wiseman", query: "Richard Wiseman luck four quadrants book"
-   - "Josef Pieper's book Leisure, The Basis of Culture" → name: "Leisure, The Basis of Culture by Josef Pieper", query: "Josef Pieper Leisure The Basis of Culture book"
-   - "Erin Murphy" → name: "Erin Murphy", query: "Erin Murphy law professor DNA privacy"
-   If unsure of missing details, keep the query close to the original — do NOT invent facts.
-Return JSON only: { "refs": [{ "name": "display name", "query": "exa search query" }] }`,
-        },
-        { role: "user", content: JSON.stringify(names) },
-      ],
+      messages: enrichMessages,
     }),
   });
   if (!res.ok) {
@@ -52,6 +65,32 @@ Return JSON only: { "refs": [{ "name": "display name", "query": "exa search quer
     throw new Error(`OpenRouter error ${res.status}: ${err.error?.message ?? "unknown"}`);
   }
   const data = await res.json();
+  const latency = (Date.now() - start) / 1000;
+
+  if (posthog && traceId) {
+    posthog.capture({
+      distinctId: profileId,
+      event: "$ai_generation",
+      properties: {
+        $ai_trace_id: traceId,
+        $ai_span_id: randomUUID(),
+        $ai_parent_id: pipelineSpanId,
+        $ai_span_name: "enrich-references",
+        $ai_model: data.model ?? "google/gemini-2.5-flash",
+        $ai_provider: "google",
+        ...getAiContentProperties({
+          input: enrichMessages,
+          output: [{ role: "assistant", content: data.choices?.[0]?.message?.content }],
+        }),
+        $ai_input_tokens: data.usage?.prompt_tokens,
+        $ai_output_tokens: data.usage?.completion_tokens,
+        $ai_total_cost_usd: data.usage?.cost,
+        $ai_latency: latency,
+        $ai_base_url: "https://openrouter.ai/api/v1",
+      },
+    });
+  }
+
   try {
     const { refs } = JSON.parse(data.choices[0].message.content);
     return Array.isArray(refs) ? refs : [];
@@ -90,7 +129,7 @@ async function batchedAll(items, fn, batchSize = 5) {
 }
 
 // ── exported run function ─────────────────────────────────────────────────────
-export async function run(briefPath, { outputDir } = {}) {
+export async function run(briefPath, { outputDir, posthog = null, profileId = null, traceId = null, pipelineSpanId = null } = {}) {
   // ── env check ───────────────────────────────────────────────────────────────
   for (const key of ["OPENROUTER_API_KEY", "EXA_API_KEY"]) {
     if (!process.env[key]) {
@@ -109,7 +148,7 @@ export async function run(briefPath, { outputDir } = {}) {
   }
 
   console.error(`Found ${names.length} references. Filtering and normalizing via AI...`);
-  let filtered = await filterAndNormalize(names);
+  let filtered = await filterAndNormalize(names, { posthog, profileId, traceId, pipelineSpanId });
   console.error(`→ ${filtered.length}/${names.length} kept`);
 
   if (filtered.length > 50) {

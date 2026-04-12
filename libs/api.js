@@ -17,15 +17,17 @@ apiClient.interceptors.response.use(
     let message = "";
 
     if (error.response?.status === 401) {
-      // User not auth, ask to re login
       toast.error("Please login");
-      // Sends the user to the login page
       redirect(config.auth.loginUrl);
+    } else if (error.response?.status === 402) {
+      // Insufficient credits — the form handles this with a rich modal.
+      // Attach structured data and reject without toasting.
+      error.creditData = error.response.data;
+      return Promise.reject(error);
     } else if (error.response?.status === 403) {
-      // User not authorized, must subscribe/purchase/pick a plan
       message = "Pick a plan to use this feature";
     } else {
-      message = error?.response?.data?.error || error.message || error.toString();
+      message = error?.response?.data?.message || error?.response?.data?.error || error.message || error.toString();
     }
 
     error.message = typeof message === "string" ? message : JSON.stringify(message);

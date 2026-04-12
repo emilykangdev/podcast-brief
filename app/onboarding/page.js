@@ -1,4 +1,7 @@
 // Onboarding page — first-time users submit an Apple Podcasts URL to generate their first brief.
+// After submission, redirects to the dashboard where they can see their queued brief.
+"use client";
+
 import config from "@/config";
 import BriefRequestForm from "@/components/BriefRequestForm";
 
@@ -15,7 +18,7 @@ export default function OnboardingPage() {
 
         <div className="space-y-4">
           <p className="text-lg font-semibold">Enter an Apple Podcasts URL</p>
-          <BriefRequestForm />
+          <BriefRequestForm onSuccess={() => { window.location.href = "/dashboard"; }} />
         </div>
       </div>
     </main>
