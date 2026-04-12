@@ -323,6 +323,8 @@ export async function sendBriefEmail({
     });
     if (error) throw error;
 
+    console.error(`[email] Brief email sent to ${profile.email} for brief ${briefId}`);
+
     await supabase
       .from("brief_email_deliveries")
       .update({
