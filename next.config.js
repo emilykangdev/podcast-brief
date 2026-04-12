@@ -32,14 +32,6 @@ const nextConfig = {
       { source: "/ingest/:path*", destination: "https://us.i.posthog.com/:path*" },
     ];
   },
-  turbopack: {
-    rules: {
-      "*.svg": {
-        loaders: ["@svgr/webpack"],
-        as: "*.js",
-      },
-    },
-  },
   webpack: (config, { webpack, isServer }) => {
     // Suppress specific warnings from Supabase realtime-js and Edge Runtime compatibility
     config.ignoreWarnings = [
