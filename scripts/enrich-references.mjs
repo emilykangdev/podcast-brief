@@ -69,6 +69,7 @@ Return JSON only: { "refs": [{ "name": "display name", "query": "exa search quer
         $ai_provider: "google",
         $ai_input_tokens: data.usage?.prompt_tokens,
         $ai_output_tokens: data.usage?.completion_tokens,
+        $ai_total_cost_usd: data.usage?.cost,
         $ai_latency: latency,
         $ai_base_url: "https://openrouter.ai/api/v1",
       },
