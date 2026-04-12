@@ -33,7 +33,7 @@ const RETRY_PROMPTS = {
   noReferences:
     "Ensure the brief includes a REFERENCES section with at least one real, citable reference mentioned in the episode. Do not hallucinate references.",
   missingSections:
-    "Ensure the brief includes all required sections (SUMMARY, IDEAS, INSIGHTS, QUOTES, HABITS, FACTS, REFERENCES, ONE-SENTENCE TAKEAWAY, RECOMMENDATIONS) with substantive content in each.",
+    "Ensure the brief includes all required sections (SUMMARY, IDEAS, INSIGHTS, QUOTES, HABITS, CLAIMS, REFERENCES, ONE-SENTENCE TAKEAWAY, RECOMMENDATIONS) with substantive content in each.",
 };
 
 const app = express();

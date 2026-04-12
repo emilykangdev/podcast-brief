@@ -78,7 +78,7 @@ async function mergeChunks(briefs) {
   const MERGE_SYSTEM = `You are combining extract_wisdom briefs from ${briefs.length} consecutive segments of the same podcast episode into one final brief.
 
 Output the same Markdown sections in this exact order:
-SUMMARY, IDEAS, INSIGHTS, QUOTES, HABITS, FACTS, REFERENCES, ONE-SENTENCE TAKEAWAY, RECOMMENDATIONS
+SUMMARY, IDEAS, INSIGHTS, QUOTES, HABITS, CLAIMS, REFERENCES, ONE-SENTENCE TAKEAWAY, RECOMMENDATIONS
 
 MERGING RULES:
 - SUMMARY: Write one unified summary covering the full episode arc, not just concatenated segment summaries.
@@ -86,7 +86,7 @@ MERGING RULES:
 - INSIGHTS: Keep the best 5-7 insights. Same deduplication rules as IDEAS.
 - QUOTES: Keep the best 10 quotes total. Prefer verbatim, punchy, standalone quotes. Drop weak or redundant ones.
 - HABITS: Keep the best 10-15 habits. Deduplicate. Prefer specific and actionable over vague.
-- FACTS: Keep all unique facts. Drop exact duplicates only.
+- CLAIMS: Keep all unique claims. Drop exact duplicates only.
 - REFERENCES: Merge into one deduplicated list. Keep all unique references.
 - ONE-SENTENCE TAKEAWAY: Write one single sentence capturing the entire episode. Do not combine segment takeaways.
 - RECOMMENDATIONS: Keep the best 10-15. Deduplicate. Prefer specific and actionable.
