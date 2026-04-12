@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import path from "path";
+import { randomUUID } from "crypto";
 import Exa from "exa-js";
 import { extractSection } from "./markdown.mjs";
 
@@ -16,8 +17,9 @@ function parseReferences(markdown) {
 
 // ── AI normalize ─────────────────────────────────────────────────────────────
 // Keeps ALL references — fixes typos, makes names specific, and generates search queries.
-async function filterAndNormalize(names) {
+async function filterAndNormalize(names, { posthog = null, profileId = null, traceId = null, pipelineSpanId = null } = {}) {
   if (names.length === 0) return [];
+  const start = Date.now();
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -52,6 +54,27 @@ Return JSON only: { "refs": [{ "name": "display name", "query": "exa search quer
     throw new Error(`OpenRouter error ${res.status}: ${err.error?.message ?? "unknown"}`);
   }
   const data = await res.json();
+  const latency = (Date.now() - start) / 1000;
+
+  if (posthog && traceId) {
+    posthog.capture({
+      distinctId: profileId,
+      event: "$ai_generation",
+      properties: {
+        $ai_trace_id: traceId,
+        $ai_span_id: randomUUID(),
+        $ai_parent_id: pipelineSpanId,
+        $ai_span_name: "enrich-references",
+        $ai_model: data.model ?? "google/gemini-2.5-flash",
+        $ai_provider: "google",
+        $ai_input_tokens: data.usage?.prompt_tokens,
+        $ai_output_tokens: data.usage?.completion_tokens,
+        $ai_latency: latency,
+        $ai_base_url: "https://openrouter.ai/api/v1",
+      },
+    });
+  }
+
   try {
     const { refs } = JSON.parse(data.choices[0].message.content);
     return Array.isArray(refs) ? refs : [];
@@ -90,7 +113,7 @@ async function batchedAll(items, fn, batchSize = 5) {
 }
 
 // ── exported run function ─────────────────────────────────────────────────────
-export async function run(briefPath, { outputDir } = {}) {
+export async function run(briefPath, { outputDir, posthog = null, profileId = null, traceId = null, pipelineSpanId = null } = {}) {
   // ── env check ───────────────────────────────────────────────────────────────
   for (const key of ["OPENROUTER_API_KEY", "EXA_API_KEY"]) {
     if (!process.env[key]) {
@@ -109,7 +132,7 @@ export async function run(briefPath, { outputDir } = {}) {
   }
 
   console.error(`Found ${names.length} references. Filtering and normalizing via AI...`);
-  let filtered = await filterAndNormalize(names);
+  let filtered = await filterAndNormalize(names, { posthog, profileId, traceId, pipelineSpanId });
   console.error(`→ ${filtered.length}/${names.length} kept`);
 
   if (filtered.length > 50) {

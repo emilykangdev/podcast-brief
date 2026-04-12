@@ -1,6 +1,7 @@
 import configFile from "@/config";
 import { findCheckoutSession } from "@/libs/stripe";
 import supabase from "@/libs/supabase/admin.mjs";
+import { getPostHog } from "@/libs/posthog/server";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -95,6 +96,21 @@ export async function POST(req) {
           console.error(`increment_credits failed for ${event.id}, ledger rolled back:`, updateError.message);
           return NextResponse.json({ error: "Credit increment failed" }, { status: 503 });
         }
+
+        const posthog = getPostHog();
+        posthog?.capture({
+          distinctId: userId,
+          event: "credit_purchase",
+          properties: {
+            plan_name: plan.name,
+            price_id: priceId,
+            price: plan.price,
+            credits: plan.credits,
+            customer_id: customerId,
+          },
+          uuid: event.id,
+        });
+        await posthog?.flush();
 
         break;
       }

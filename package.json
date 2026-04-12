@@ -33,6 +33,8 @@
     "nextjs-toploader": "^3.7.15",
     "nodemailer": "^6.9.16",
     "playwright-core": "^1.58.2",
+    "posthog-js": "^1.367.0",
+    "posthog-node": "^5.29.2",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-hot-toast": "^2.4.1",
