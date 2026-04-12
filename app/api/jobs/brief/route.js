@@ -123,11 +123,6 @@ export async function POST(req) {
       );
     }
 
-    const { episodeUrl, durationSeconds, regenerate, sig } = await req.json();
-    if (!episodeUrl) {
-      return NextResponse.json({ error: "episodeUrl required" }, { status: 400 });
-    }
-
     // Admin client for RPC calls (service_role only)
     const db = adminSupabase;
 
