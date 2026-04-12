@@ -414,7 +414,9 @@ The `error_log` column is a jsonb array. Each entry has a `step` field and conte
 
 ### Key invariants
 
-- **A brief never stays stuck.** The catch block in `runPipeline()` always calls `completeBrief()`. On worker crash, periodic recovery (every 5 min) resets `generating` rows older than `STALE_JOB_TIMEOUT_MS` (currently 20 min) back to `queued`.
+- **A brief never stays stuck (self-healing).** Two layers of protection:
+  1. **Normal errors** (Browserbase 429, Deepgram timeout, etc.): the `catch` block in `runPipeline()` calls `completeBrief()` immediately → status flips to `complete` → email sent if content exists.
+  2. **Worker crash** (Railway kills the container mid-pipeline, OOM, deploy): `catch` never runs, so the brief stays at `generating`. Stale job recovery runs every 5 min and resets `generating` rows older than 20 min (`STALE_JOB_TIMEOUT_MS`) back to `queued`. The pipeline re-runs on the next poll cycle. During those ≤20 min, the user sees "Generating" with readable content if step 2 already wrote `output_markdown` — this is temporary and self-heals.
 - **Stale job timeout must exceed max pipeline duration.** If a legit job takes longer than `STALE_JOB_TIMEOUT_MS` (20 min, `server.mjs:17`), recovery could reset it to `queued` while it's still running. This is safe: there's only one worker per environment, and `isProcessing` prevents it from picking up the re-queued row. When the original run finishes, `completeBrief` overwrites the status back to `complete`. No double processing. The 20-minute threshold has wide margin over the typical 2-5 minute pipeline. If long episodes (3h+) start hitting this, increase the timeout.
 - **`output_markdown` can exist while `status='generating'`.** Written mid-pipeline as crash insurance. The dashboard shows it with a "Generating" badge.
 - **Badge = has content, not error_log.** Green "Complete" if `output_markdown` exists, red "Failed" if null. `error_log` is developer-only (check Supabase). A brief with content is always "Complete" to the user, even if the pipeline had internal retries or Browserbase failures.
