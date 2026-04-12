@@ -10,7 +10,7 @@ const faqList = [
     question: "What do I get exactly?",
     answer: (
       <div className="space-y-2 leading-relaxed">
-        You buy credits. 1 credit = 1 hour of podcast content, rounded up. For exmaple: 1h and 10 minutes consumes 2 credits. You can fill up on credits at any
+        You buy credits. 1 credit = 1 hour of podcast content, rounded up. For example: 1h and 2 minutes consumes 2 credits. You can fill up on credits at any
         time.
       </div>
     ),
