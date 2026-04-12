@@ -7,7 +7,7 @@ import supabase from "../supabase/admin.mjs";
 // but use ESM syntax. They work under Next.js (which transpiles) but not under
 // plain `node server.mjs`. Inline the values we need instead.
 const DOMAIN_NAME = process.env.NEXT_PUBLIC_DOMAIN_NAME || "localhost:3000";
-const FROM_NOREPLY = `PodcastBrief <podcastbrief.noreply@emilykang.dev>`;
+const FROM_ADMIN = `Emily at PodcastBrief <podcastbrief@emilykang.dev>`;
 
 let resendClient = null;
 function getResendClient() {
@@ -314,7 +314,7 @@ export async function sendBriefEmail({
 
   try {
     const { data, error } = await getResendClient().emails.send({
-      from: FROM_NOREPLY,
+      from: FROM_ADMIN,
       to: profile.email,
       subject,
       html: emailHtml,
