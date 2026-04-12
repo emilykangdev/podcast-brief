@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Mic } from "lucide-react";
 import ButtonSignin from "./ButtonSignin";
 import config from "@/config";
 
@@ -47,15 +48,7 @@ const Header = () => {
             href="/"
             title={`${config.appName} hompage`}
           >
-            {/* <Image
-              src={logo}
-              alt={`${config.appName} logo`}
-              className="w-8"
-              placeholder="blur"
-              priority={true}
-              width={32}
-              height={32}
-            /> */}
+            <Mic className="w-6 h-6" />
             <span className="font-extrabold text-lg">{config.appName}</span>
           </Link>
         </div>

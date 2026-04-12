@@ -14,10 +14,10 @@ const features = [
   {
     title: "Learning Brief",
     description:
-      "The Brief shows up in your inbox. Key ideas are  explained clearly, every important reference is unpacked (like books and thinkers mentioned), with reference links so you can explore further. It's a bridge between listening and learning.",
+      "The Brief shows up in your inbox. Key ideas are explained clearly, every important reference is unpacked (like books and thinkers mentioned), with reference links so you can explore further. A Markdown file is attached to every email so you can paste it straight into your favorite notes app. It's a bridge between listening and learning.",
     type: "video",
-    path: "https://d3m8mk7e1mf7xn.cloudfront.net/app/newsletter.webm",
-    format: "video/webm",
+    path: "/podcastbrief-demo.mp4",
+    format: "video/mp4",
     svg: (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -76,7 +76,7 @@ const Item = ({ feature, isOpen, setFeatureSelected }) => {
 // Video are set to autoplay for best UX.
 const Media = ({ feature }) => {
   const { type, path, format, alt } = feature;
-  const style = "rounded-2xl aspect-square w-full sm:w-[26rem]";
+  const style = "rounded-2xl aspect-square w-full sm:w-[34rem]";
   const size = {
     width: 500,
     height: 500,
@@ -124,7 +124,7 @@ const FeaturesAccordion = () => {
     >
       <div className="px-8">
         <h2 className="font-extrabold text-4xl lg:text-6xl tracking-tight mb-12 md:mb-24">
-          All you need to better, faster notes
+          All you need to make better, faster notes
           <span className="bg-neutral text-neutral-content px-2 md:px-4 ml-1 md:ml-1.5 leading-relaxed whitespace-nowrap">
             about every podcast episode
           </span>

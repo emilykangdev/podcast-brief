@@ -3,6 +3,11 @@
   themes: light --default;
 }
 
+[data-theme="light"] {
+  --color-primary: oklch(0.47 0.12 192);
+  --color-primary-content: oklch(0.98 0.01 192);
+}
+
 @theme {
   --font-display: "Satoshi", "sans-serif";
   
