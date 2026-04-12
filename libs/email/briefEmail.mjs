@@ -1,11 +1,23 @@
 import { Marked } from "marked";
 import juice from "juice";
-import config from "../../config.js";
+import { Resend } from "resend";
 import supabase from "../supabase/admin.mjs";
-import resendModule from "../resend.js";
-const { sendEmail } = resendModule;
 
-const DASHBOARD_URL = getDashboardUrl(config.domainName);
+// Can't import config.js or resend.js — they're .js files (CommonJS under Node 18)
+// but use ESM syntax. They work under Next.js (which transpiles) but not under
+// plain `node server.mjs`. Inline the values we need instead.
+const DOMAIN_NAME = process.env.NEXT_PUBLIC_DOMAIN_NAME || "localhost:3000";
+const FROM_NOREPLY = `PodcastBrief <podcastbrief.noreply@emilykang.dev>`;
+
+let resendClient = null;
+function getResendClient() {
+  if (!resendClient) {
+    resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resendClient;
+}
+
+const DASHBOARD_URL = getDashboardUrl(DOMAIN_NAME);
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => {
@@ -297,14 +309,15 @@ export async function sendBriefEmail({
     : "brief.md";
 
   try {
-    const data = await sendEmail({
-      from: config.resend.fromNoReply,
+    const { data, error } = await getResendClient().emails.send({
+      from: FROM_NOREPLY,
       to: profile.email,
       subject,
       html: emailHtml,
       text: plainText,
       attachments: [{ filename, content: Buffer.from(outputMarkdown) }],
     });
+    if (error) throw error;
 
     await supabase
       .from("brief_email_deliveries")
