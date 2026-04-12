@@ -2,7 +2,8 @@ import { Marked } from "marked";
 import juice from "juice";
 import config from "../../config.js";
 import supabase from "../supabase/admin.mjs";
-import { sendEmail } from "../resend.js";
+import resendModule from "../resend.js";
+const { sendEmail } = resendModule;
 
 const DASHBOARD_URL = getDashboardUrl(config.domainName);
 
