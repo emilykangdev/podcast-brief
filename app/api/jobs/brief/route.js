@@ -3,6 +3,7 @@ import { createClient } from "@/libs/supabase/server";
 import adminSupabase from "@/libs/supabase/admin.mjs";
 import { MAX_EPISODE_SECONDS, creditsNeeded as calcCredits, getRegenCost } from "@/libs/credits";
 import { verifyEstimate } from "@/libs/estimate-signer";
+import { getPostHog } from "@/libs/posthog/server";
 
 const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
 
@@ -148,6 +149,14 @@ export async function POST(req) {
       console.error("Unexpected RPC error:", result.error);
       return NextResponse.json({ error: "Failed to queue brief" }, { status: 500 });
     }
+
+    const posthog = getPostHog();
+    posthog?.capture({
+      distinctId: user.id,
+      event: "brief_queued",
+      properties: { episode_url: episodeUrl },
+    });
+    posthog?.flush().catch((e) => console.error("[posthog] flush failed:", e.message));
 
     return NextResponse.json({
       status: "queued",

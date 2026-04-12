@@ -5,6 +5,8 @@ import { randomUUID } from "crypto";
 import { writeFileSync } from "fs";
 import { mkdir, rm } from "fs/promises";
 import supabase from "./libs/supabase/admin.mjs";
+import { setupExpressErrorHandler } from "posthog-node";
+import { getPostHog } from "./libs/posthog/server.mjs";
 import { run as transcribe } from "./scripts/transcribe.mjs";
 import { run as generateBrief } from "./scripts/generate-brief.mjs";
 import { run as enrichReferences } from "./scripts/enrich-references.mjs";
@@ -37,6 +39,9 @@ const RETRY_PROMPTS = {
     "Ensure the brief includes all required sections (SUMMARY, IDEAS, INSIGHTS, QUOTES, HABITS, CLAIMS, REFERENCES, ONE-SENTENCE TAKEAWAY, RECOMMENDATIONS) with substantive content in each.",
 };
 
+const posthog = getPostHog();
+log(`[posthog] initialized: ${posthog !== null}`);
+
 const app = express();
 app.use(express.json());
 
@@ -67,6 +72,10 @@ app.get("/status", async (req, res) => {
     queued,
   });
 });
+
+// Catches Express-level errors (malformed JSON, auth failures, etc.)
+// Pipeline errors are fire-and-forget so they're caught in runPipeline's catch block instead.
+if (posthog) setupExpressErrorHandler(posthog, app);
 
 // Closes out a brief row regardless of outcome. Pass output_markdown + references on success;
 // omit them on failure — the row still flips to "complete" so the user isn't left hanging.
@@ -117,6 +126,7 @@ async function generateBriefWithValidation({
   briefId,
   outputDir,
   errorLog,
+  posthogCtx,
 }) {
   let { outputPath, outputMd } = await generateBrief({
     transcriptId,
@@ -124,6 +134,7 @@ async function generateBriefWithValidation({
     profileId,
     briefId,
     outputDir,
+    ...posthogCtx,
   });
 
   const sectionsCheck = briefHasAllSections(outputMd);
@@ -145,6 +156,7 @@ async function generateBriefWithValidation({
     force: true,
     promptAddition,
     outputDir,
+    ...posthogCtx,
   }));
 
   const refsCheck2 = briefHasReferences(outputMd);
@@ -159,9 +171,13 @@ async function generateBriefWithValidation({
 
 async function runPipeline(episodeUrl, profileId, briefId) {
   const jobId = randomUUID();
+  const traceId = randomUUID();
+  const pipelineSpanId = randomUUID();
+  const pipelineStart = Date.now();
   const jobDir = path.join(os.tmpdir(), `podcast-brief-${jobId}`);
   await mkdir(jobDir, { recursive: true });
   const errorLog = [];
+  const posthogCtx = { posthog, traceId, pipelineSpanId };
 
   try {
     const { episodeId, transcriptPath, podcastName, episodeTitle } = await transcribe(episodeUrl, { outputDir: jobDir });
@@ -179,9 +195,14 @@ async function runPipeline(episodeUrl, profileId, briefId) {
       briefId,
       outputDir: jobDir,
       errorLog,
+      posthogCtx,
     });
 
-    const { referencesJsonPath } = await enrichReferences(outputPath, { outputDir: jobDir });
+    const { referencesJsonPath } = await enrichReferences(outputPath, {
+      outputDir: jobDir,
+      profileId,
+      ...posthogCtx,
+    });
 
     let finalBriefMd = outputMd;
     let referencesJson = null;
@@ -227,10 +248,35 @@ async function runPipeline(episodeUrl, profileId, briefId) {
       });
     }
 
+    posthog?.capture({
+      distinctId: profileId,
+      event: "$ai_span",
+      properties: {
+        $ai_trace_id: traceId,
+        $ai_span_id: pipelineSpanId,
+        $ai_span_name: "brief-pipeline",
+        $ai_latency: (Date.now() - pipelineStart) / 1000,
+        $ai_is_error: errorLog.length > 0,
+        $ai_input_state: { episodeUrl },
+        $ai_output_state: { briefId },
+      },
+    });
+    if (posthog) {
+      log(`[posthog] flushing ${traceId}`);
+      await posthog.flush().catch((e) => logError(`[posthog] flush failed: ${e.message}`));
+      log(`[posthog] flushed`);
+    }
+
     log(`[pipeline] complete [job=${jobId}]${errorLog.length > 0 ? " (degraded)" : ""}`);
   } catch (err) {
     logError(`[pipeline error] ${err.message}`);
     errorLog.push({ step: "unrecoverable", error: err.message, stack: err.stack });
+    posthog?.captureException(err, profileId, {
+      briefId,
+      jobId,
+      episodeUrl,
+      pipeline_step: errorLog[errorLog.length - 1]?.step ?? "unknown",
+    });
 
     const errorCompletedAt = new Date().toISOString();
     await completeBrief(briefId, { errorLog, completedAt: errorCompletedAt }).catch((e) =>
@@ -336,4 +382,9 @@ app.listen(PORT, async () => {
   setInterval(recoverStaleJobs, RECOVERY_INTERVAL_MS);
   setInterval(pollForWork, POLL_INTERVAL_MS);
   pollForWork(); // check immediately on boot
+});
+
+process.on("SIGTERM", async () => {
+  await posthog?.shutdown();
+  process.exit(0);
 });
