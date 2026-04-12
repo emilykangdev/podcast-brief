@@ -33,10 +33,15 @@ async function callOpenRouter(system, user, { maxTokens = 16000 } = {}) {
   const data = await res.json();
   if (!data.choices?.length)
     throw new Error(`OpenRouter returned no choices: ${JSON.stringify(data)}`);
+  const messages = [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
   return {
     content: data.choices[0].message.content,
     usage: data.usage ?? {},
     model: data.model ?? "unknown",
+    messages,
   };
 }
 
@@ -178,6 +183,8 @@ export async function run({
           $ai_span_name: chunks.length > 1 ? `extract-chunk-${i + 1}` : "extract-brief",
           $ai_model: r.model,
           $ai_provider: "anthropic",
+          $ai_input: r.messages,
+          $ai_output_choices: [{ role: "assistant", content: r.content }],
           $ai_input_tokens: r.usage.prompt_tokens,
           $ai_output_tokens: r.usage.completion_tokens,
           $ai_total_cost_usd: r.usage.cost,
@@ -204,6 +211,8 @@ export async function run({
         $ai_span_name: "merge-chunks",
         $ai_model: mergeResult.model,
         $ai_provider: "anthropic",
+        $ai_input: mergeResult.messages,
+        $ai_output_choices: [{ role: "assistant", content: mergeResult.content }],
         $ai_input_tokens: mergeResult.usage.prompt_tokens,
         $ai_output_tokens: mergeResult.usage.completion_tokens,
         $ai_total_cost_usd: mergeResult.usage.cost,

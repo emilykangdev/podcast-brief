@@ -19,6 +19,22 @@ function parseReferences(markdown) {
 // Keeps ALL references — fixes typos, makes names specific, and generates search queries.
 async function filterAndNormalize(names, { posthog = null, profileId = null, traceId = null, pipelineSpanId = null } = {}) {
   if (names.length === 0) return [];
+  const enrichMessages = [
+    {
+      role: "system",
+      content: `You are cleaning up a list of podcast references for web lookup.
+Keep ALL references — every person, organization, court case, book, paper, study, tool, concept, or company. Do NOT filter anything out. The user wants a complete list so they can look up anyone or anything mentioned.
+For each reference: fix any typos, make the name more specific, then write a targeted search query.
+   Examples:
+   - "Cantral ladder happiness measurement scale" → name: "Cantril Ladder", query: "Cantril Ladder happiness scale psychology"
+   - "The French luck philosopher's four quadrants" → name: "Richard Wiseman", query: "Richard Wiseman luck four quadrants book"
+   - "Josef Pieper's book Leisure, The Basis of Culture" → name: "Leisure, The Basis of Culture by Josef Pieper", query: "Josef Pieper Leisure The Basis of Culture book"
+   - "Erin Murphy" → name: "Erin Murphy", query: "Erin Murphy law professor DNA privacy"
+   If unsure of missing details, keep the query close to the original — do NOT invent facts.
+Return JSON only: { "refs": [{ "name": "display name", "query": "exa search query" }] }`,
+    },
+    { role: "user", content: JSON.stringify(names) },
+  ];
   const start = Date.now();
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -31,22 +47,7 @@ async function filterAndNormalize(names, { posthog = null, profileId = null, tra
       response_format: { type: "json_object" },
       max_tokens: 2000,
       temperature: 0.2,
-      messages: [
-        {
-          role: "system",
-          content: `You are cleaning up a list of podcast references for web lookup.
-Keep ALL references — every person, organization, court case, book, paper, study, tool, concept, or company. Do NOT filter anything out. The user wants a complete list so they can look up anyone or anything mentioned.
-For each reference: fix any typos, make the name more specific, then write a targeted search query.
-   Examples:
-   - "Cantral ladder happiness measurement scale" → name: "Cantril Ladder", query: "Cantril Ladder happiness scale psychology"
-   - "The French luck philosopher's four quadrants" → name: "Richard Wiseman", query: "Richard Wiseman luck four quadrants book"
-   - "Josef Pieper's book Leisure, The Basis of Culture" → name: "Leisure, The Basis of Culture by Josef Pieper", query: "Josef Pieper Leisure The Basis of Culture book"
-   - "Erin Murphy" → name: "Erin Murphy", query: "Erin Murphy law professor DNA privacy"
-   If unsure of missing details, keep the query close to the original — do NOT invent facts.
-Return JSON only: { "refs": [{ "name": "display name", "query": "exa search query" }] }`,
-        },
-        { role: "user", content: JSON.stringify(names) },
-      ],
+      messages: enrichMessages,
     }),
   });
   if (!res.ok) {
@@ -67,6 +68,8 @@ Return JSON only: { "refs": [{ "name": "display name", "query": "exa search quer
         $ai_span_name: "enrich-references",
         $ai_model: data.model ?? "google/gemini-2.5-flash",
         $ai_provider: "google",
+        $ai_input: enrichMessages,
+        $ai_output_choices: [{ role: "assistant", content: data.choices?.[0]?.message?.content }],
         $ai_input_tokens: data.usage?.prompt_tokens,
         $ai_output_tokens: data.usage?.completion_tokens,
         $ai_total_cost_usd: data.usage?.cost,
