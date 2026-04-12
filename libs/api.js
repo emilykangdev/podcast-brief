@@ -24,8 +24,11 @@ apiClient.interceptors.response.use(
       // Attach structured data and reject without toasting.
       error.creditData = error.response.data;
       return Promise.reject(error);
+    } else if (error.response?.status === 429) {
+      toast.error("Slow down — please try again in a moment.");
+      return Promise.reject(error);
     } else if (error.response?.status === 403) {
-      message = "Pick a plan to use this feature";
+      message = error?.response?.data?.error || "Access denied";
     } else {
       message = error?.response?.data?.message || error?.response?.data?.error || error.message || error.toString();
     }

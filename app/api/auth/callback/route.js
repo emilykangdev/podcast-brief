@@ -1,10 +1,28 @@
 import { createClient } from "@/libs/supabase/server";
 import { getPostHog } from "@/libs/posthog/server";
 import { NextResponse } from "next/server";
+import arcjet, { slidingWindow } from "@arcjet/next";
+
+// Rate limit only — no detectBot here. Email clients (Gmail, Outlook, corporate
+// security gateways) prefetch magic link URLs, and detectBot({ allow: [] }) would
+// block those prefetch requests, breaking magic link login.
+const aj = arcjet({
+  key: process.env.ARCJET_KEY,
+  rules: [
+    // 10 requests per 10 minutes per IP — generous enough for link prefetch +
+    // retries, tight enough to block brute-force auth callback abuse
+    slidingWindow({ mode: "LIVE", interval: "10m", max: 10 }),
+  ],
+});
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req) {
+  const decision = await aj.protect(req);
+  if (decision.isDenied()) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const requestUrl = new URL(req.url);
   const code = requestUrl.searchParams.get("code");
   const supabase = await createClient();

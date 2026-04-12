@@ -237,6 +237,28 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 | OpenRouter | LLM API (brief generation) | — |
 | Exa | Search API (reference enrichment) | — |
 | Stripe | Payment processing (embedded checkout + webhooks) | `dashboard.stripe.com` |
+| Arcjet | Security: shield, rate limiting, bot detection | `app.arcjet.com` |
+
+## Security (Arcjet)
+
+Two-layer defense using `@arcjet/next`:
+
+**Layer 1: Global shield in `middleware.js`** — OWASP Top 10 attack protection (SQLi, XSS, etc.) on all non-static routes. Fails open on Arcjet outage to avoid site-wide downtime.
+
+**Layer 2: Per-route rate limiting** — tailored rules on each API endpoint:
+
+| Route | Algorithm | Limit | Track By | Bot Detection |
+|-------|-----------|-------|----------|---------------|
+| `/api/auth/callback` | slidingWindow | 10/10min | IP | No (email prefetchers would be blocked) |
+| `/api/jobs/brief` | tokenBucket | capacity 10, refill 2/min | userId | Yes |
+| `/api/jobs/brief/estimate` | slidingWindow | 30/min | userId | No |
+| `/api/webhook/stripe` | — | — | — | No (protected by HMAC signature + idempotent ledger) |
+
+**Design decisions:**
+- Stripe webhook has no per-route Arcjet — HMAC signature verification + idempotent ledger insert is sufficient. Rate limiting would risk dropping legitimate webhooks and triggering Stripe retry storms.
+- Auth callback has no bot detection — email clients (Gmail, Outlook, corporate gateways) prefetch magic link URLs, and `detectBot` would block those prefetch requests.
+- Authenticated routes (brief, estimate) track by `userId` instead of IP to avoid penalizing shared networks.
+- All rules are `LIVE` mode (blocking). Switch to `DRY_RUN` to log without blocking if false positives appear.
 
 ## Env Vars
 
@@ -247,6 +269,7 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 - `STRIPE_SECRET_KEY` — Stripe secret key (server-only, for creating checkout sessions)
 - `STRIPE_WEBHOOK_SECRET` — Stripe webhook signing secret (server-only, for verifying webhook payloads)
 - `NEXT_PUBLIC_STRIPE_PRICE_5_CREDITS`, `NEXT_PUBLIC_STRIPE_PRICE_15_CREDITS`, `NEXT_PUBLIC_STRIPE_PRICE_50_CREDITS` — Stripe price IDs for the 3 credit packs. `NEXT_PUBLIC_` prefix required because config.js is imported by client components (price IDs are not secrets — visible in checkout URLs). Set per environment (test-mode for Preview, live-mode for Production).
+- `ARCJET_KEY` — Arcjet site key (server-only, for shield + rate limiting + bot detection). Get from https://app.arcjet.com
 - `APP_ENV` — `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Written to `briefs.environment` at submission time.
 - `NEXT_PUBLIC_DOMAIN_NAME` — Naked domain for the app (e.g. `podcast-brief.vercel.app`). Used for dashboard links in emails and SEO. Falls back to `localhost:3000` in dev.
 
