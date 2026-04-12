@@ -5,6 +5,9 @@
 alter table public.brief_email_deliveries
   add column if not exists completed_at timestamptz;
 
+-- Drop the old single-column unique index (blocks regen emails)
+drop index if exists public.brief_email_deliveries_brief_id_uidx;
+
 -- Ensure exactly one email per brief completion.
 -- Regens produce a new completed_at, so a new email is allowed.
 -- Retries/crashes of the same completion are blocked.
