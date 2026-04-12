@@ -27,8 +27,8 @@ const Hero = () => {
         <h1 className="font-extrabold text-4xl lg:text-6xl tracking-tight">
           Turn podcast episodes into real learning
         </h1>
-        <p className="text-lg opacity-80 leading-relaxed max-w-2xl">
-          Stay on top of your field, interests, and news. Every episode becomes a clear brief — key ideas explained, books and thinkers unpacked, ready to save to your favorite notes app or act on right away.
+        <p className="text-base opacity-80 leading-relaxed max-w-2xl">
+          Stay on top of your field, interests, and news. Every episode becomes a clear brief — key ideas explained, references unpacked, ready to save to your favorite notes app or act on right away.
         </p>
         <Link href={config.auth.loginUrl} className="btn btn-primary btn-wide">
           Get {config.appName}

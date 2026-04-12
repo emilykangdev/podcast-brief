@@ -13,8 +13,31 @@ import Image from "next/image";
 const features = [
   {
     title: "Learning Brief",
-    description:
-      "The Brief shows up in your inbox. Key ideas are explained clearly, every important reference is unpacked (like books and thinkers mentioned), with reference links so you can explore further. A Markdown file is attached to every email so you can paste it straight into your favorite notes app. It's a bridge between listening and learning.",
+    description: (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 text-base-content/70">
+          <span className="text-2xl">🎙️</span>
+          <span>Podcast episode</span>
+          <span className="text-xl">→</span>
+          <span className="text-2xl">📧</span>
+          <span>Email with brief + Markdown file</span>
+        </div>
+        <ul className="space-y-2">
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-0.5">•</span>
+            <span>Key ideas explained clearly, every reference unpacked with links to explore further</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-0.5">•</span>
+            <span>Markdown file attached — paste straight into Obsidian, Notion, or your favorite notes app</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-0.5">•</span>
+            <span>Dashboard to see all your briefs at once — download everything as a zip file organized by podcast</span>
+          </li>
+        </ul>
+      </div>
+    ),
     type: "video",
     path: "/podcastbrief-demo.mp4",
     format: "video/mp4",
@@ -62,7 +85,7 @@ const Item = ({ feature, isOpen, setFeatureSelected }) => {
         className={`transition-all duration-300 ease-in-out text-base-content-secondary overflow-hidden`}
         style={
           isOpen
-            ? { maxHeight: accordion?.current?.scrollHeight, opacity: 1 }
+            ? { maxHeight: "none", opacity: 1 }
             : { maxHeight: 0, opacity: 0 }
         }
       >
