@@ -222,6 +222,7 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 - **Browserbase free tier: 1 concurrent session.** Pipeline jobs are queued and processed one at a time.
 - **Supabase is the queue.** No in-memory state. Worker polls for `status='queued'` rows.
 - **Pipeline always completes.** Failed briefs get `status='complete'` with `error_log` populated. Users are never left hanging.
+- **`.mjs` vs `.js` — don't cross the streams.** `.mjs` = universal, both Next.js and Node can use it, put shared code here. `.js` = Next.js only, worker code must never import it. Only one dangerous direction: `.mjs` → `.js` (crashes on Railway because Node 18 treats `.js` as CommonJS but they contain ESM syntax).
 - **Email on completion.** After `completeBrief()` succeeds with non-null `output_markdown`, the worker sends the user an email with the brief rendered as HTML and the raw markdown attached as a `.md` file. Idempotency is enforced by a unique index on `brief_email_deliveries.brief_id`. Email is currently awaited inline in `runPipeline()` (errors caught, non-blocking). In the future, true fire-and-forget with a separate email worker would be better and ideal if this actually gets any customers.
 
 ## Infrastructure
