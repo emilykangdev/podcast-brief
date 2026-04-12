@@ -12,6 +12,7 @@ import { run as validateReferences } from "./scripts/validate-references.mjs";
 import { run as mergeReferences } from "./scripts/merge-references.mjs";
 import { briefHasAllSections, briefHasReferences } from "./scripts/validate_pipeline.mjs";
 import { cleanUrl } from "./libs/url.mjs";
+import { sendBriefEmail } from "./libs/email/briefEmail.mjs";
 
 const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
 const STALE_JOB_TIMEOUT_MS = 20 * 60 * 1000;
@@ -201,6 +202,17 @@ async function runPipeline(episodeUrl, profileId, briefId) {
       references: referencesJson,
       errorLog: errorLog.length > 0 ? errorLog : null,
     });
+
+    // Awaited but non-blocking — errors caught, don't crash pipeline
+    if (finalBriefMd) {
+      await sendBriefEmail({
+        briefId,
+        profileId,
+        outputMarkdown: finalBriefMd,
+        episodeTitle,
+        podcastName,
+      }).catch((err) => logError(`[email] Failed to send brief email for ${briefId}:`, err.message));
+    }
 
     if (errorLog.length > 0) {
       await alertDeveloper({

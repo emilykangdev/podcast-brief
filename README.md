@@ -222,6 +222,7 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 - **Browserbase free tier: 1 concurrent session.** Pipeline jobs are queued and processed one at a time.
 - **Supabase is the queue.** No in-memory state. Worker polls for `status='queued'` rows.
 - **Pipeline always completes.** Failed briefs get `status='complete'` with `error_log` populated. Users are never left hanging.
+- **Email on completion.** After `completeBrief()` succeeds with non-null `output_markdown`, the worker sends the user an email with the brief rendered as HTML and the raw markdown attached as a `.md` file. Idempotency is enforced by a unique index on `brief_email_deliveries.brief_id`. Email is currently awaited inline in `runPipeline()` (errors caught, non-blocking). In the future, true fire-and-forget with a separate email worker would be better and ideal if this actually gets any customers.
 
 ## Infrastructure
 
@@ -246,12 +247,15 @@ The dashboard (`/dashboard`) is a server component that fetches briefs from Supa
 - `STRIPE_WEBHOOK_SECRET` — Stripe webhook signing secret (server-only, for verifying webhook payloads)
 - `NEXT_PUBLIC_STRIPE_PRICE_5_CREDITS`, `NEXT_PUBLIC_STRIPE_PRICE_15_CREDITS`, `NEXT_PUBLIC_STRIPE_PRICE_50_CREDITS` — Stripe price IDs for the 3 credit packs. `NEXT_PUBLIC_` prefix required because config.js is imported by client components (price IDs are not secrets — visible in checkout URLs). Set per environment (test-mode for Preview, live-mode for Production).
 - `APP_ENV` — `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Written to `briefs.environment` at submission time.
+- `NEXT_PUBLIC_DOMAIN_NAME` — Naked domain for the app (e.g. `podcast-brief.vercel.app`). Used for dashboard links in emails and SEO. Falls back to `localhost:3000` in dev.
 
 ### Railway (Worker)
 - `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY` — Supabase admin client
 - `APP_ENV` — `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Must match Vercel's value for the corresponding environment. Worker only polls briefs where `environment = APP_ENV`.
 - `DEEPGRAM_API_KEY`, `OPENROUTER_API_KEY`, `EXA_API_KEY` — pipeline APIs
 - `BROWSERBASE_API_KEY`, `BROWSERBASE_PROJECT_ID` — headless browser
+- `RESEND_API_KEY` — Resend email API key (for brief completion emails)
+- `NEXT_PUBLIC_DOMAIN_NAME` — Same value as Vercel. Used for dashboard links in emails.
 - `WEBHOOK_URL` — developer error alert endpoint (optional)
 
 Note: Vercel and Railway both use `SUPABASE_SECRET_KEY` but for different purposes — Vercel for API route credit RPCs, Railway for worker brief processing. They still communicate only through Supabase (no direct HTTP calls between them).

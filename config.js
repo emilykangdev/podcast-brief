@@ -5,7 +5,7 @@ const config = {
   appDescription:
     "PodcastBrief turns podcast episodes into clear learning briefs with key ideas, books, and references explained so you can actually learn from what you listen to.",
   // REQUIRED (no https://, not trialing slash at the end, just the naked domain)
-  domainName: "not-yet",
+  domainName: process.env.NEXT_PUBLIC_DOMAIN_NAME || "localhost:3000",
   crisp: {
     // Crisp website ID. IF YOU DON'T USE CRISP: just remove this => Then add a support email in this config file (resend.supportEmail) otherwise customer support won't work.
     id: "",
