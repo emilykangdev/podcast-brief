@@ -4,6 +4,26 @@ import adminSupabase from "@/libs/supabase/admin.mjs";
 import { MAX_EPISODE_SECONDS, creditsNeeded as calcCredits, getRegenCost } from "@/libs/credits";
 import { verifyEstimate } from "@/libs/estimate-signer";
 import { getPostHog } from "@/libs/posthog/server";
+import arcjet, { shield, tokenBucket, detectBot } from "@arcjet/next";
+
+// Single Arcjet decision for this route: shield + bot detection + rate limit.
+// Most sensitive endpoint — consumes credits and triggers expensive Browserbase
+// pipeline. Token bucket allows burst of 10 briefs (batch session), then 2/min
+// sustained.
+const aj = arcjet({
+  key: process.env.ARCJET_KEY,
+  rules: [
+    shield({ mode: "LIVE" }),
+    tokenBucket({
+      mode: "LIVE",
+      refillRate: 2,   // 2 tokens per minute
+      interval: 60,    // refill interval in seconds
+      capacity: 10,    // max burst size
+      characteristics: ["userId"],
+    }),
+    detectBot({ mode: "LIVE", allow: [] }),
+  ],
+});
 
 const APP_ENV = process.env.APP_ENV || "DEVELOPMENT";
 
@@ -89,6 +109,23 @@ export async function POST(req) {
     if (error || !user) {
       console.error("Auth failed:", error?.message ?? "no user");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limit AFTER auth — tracked per user, not per IP
+    const decision = await aj.protect(req, { userId: user.id, requested: 1 });
+    if (decision.isDenied()) {
+      if (decision.reason.isBot()) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429 }
+      );
+    }
+
+    const { episodeUrl, durationSeconds, regenerate, sig } = await req.json();
+    if (!episodeUrl) {
+      return NextResponse.json({ error: "episodeUrl required" }, { status: 400 });
     }
 
     // Admin client for RPC calls (service_role only)

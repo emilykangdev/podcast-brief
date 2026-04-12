@@ -1,10 +1,32 @@
 import { createClient } from "@/libs/supabase/server";
 import { getPostHog } from "@/libs/posthog/server";
 import { NextResponse } from "next/server";
+import arcjet, { shield, slidingWindow } from "@arcjet/next";
+
+// Single Arcjet decision for this route: shield + rate limit. No detectBot here
+// because email clients (Gmail, Outlook, corporate security gateways) prefetch
+// magic link URLs, and detectBot({ allow: [] }) would break login.
+const aj = arcjet({
+  key: process.env.ARCJET_KEY,
+  rules: [
+    shield({ mode: "LIVE" }),
+    // 10 requests per 10 minutes per IP — generous enough for link prefetch +
+    // retries, tight enough to block brute-force auth callback abuse
+    slidingWindow({ mode: "LIVE", interval: "10m", max: 10 }),
+  ],
+});
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req) {
+  const decision = await aj.protect(req);
+  if (decision.isDenied()) {
+    if (!decision.reason.isRateLimit()) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const requestUrl = new URL(req.url);
   const code = requestUrl.searchParams.get("code");
   const supabase = await createClient();

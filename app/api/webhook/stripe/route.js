@@ -5,6 +5,11 @@ import { getPostHog } from "@/libs/posthog/server";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+// No per-route Arcjet here — Stripe webhooks are already protected by HMAC
+// signature verification + idempotent ledger insert. Rate limiting would risk
+// dropping legitimate webhooks and triggering Stripe retry storms.
+// Middleware still applies shield to this route; it's the one /api path kept on
+// middleware so the webhook gets OWASP protection without a second protect() call.
 
 export async function POST(req) {
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {

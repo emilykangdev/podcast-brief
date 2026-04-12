@@ -3,11 +3,38 @@ import { createClient } from "@/libs/supabase/server";
 import { resolveEpisode } from "@/libs/podcast/resolve.mjs";
 import { MAX_EPISODE_SECONDS, creditsNeeded, formatDuration } from "@/libs/credits";
 import { signEstimate } from "@/libs/estimate-signer";
+import arcjet, { shield, slidingWindow } from "@arcjet/next";
+
+const aj = arcjet({
+  key: process.env.ARCJET_KEY,
+  rules: [
+    shield({ mode: "LIVE" }),
+    slidingWindow({
+      mode: "LIVE",
+      interval: "1m",
+      max: 30,
+      characteristics: ["userId"],
+    }),
+  ],
+});
 
 export async function POST(req) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Rate limit AFTER auth — tracked per user, 30 requests/min allows rapid
+  // URL experimentation without enabling scripted abuse
+  const decision = await aj.protect(req, { userId: user.id });
+  if (decision.isDenied()) {
+    if (!decision.reason.isRateLimit()) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429 }
+    );
+  }
 
   const { episodeUrl } = await req.json();
   if (!episodeUrl) return NextResponse.json({ error: "episodeUrl required" }, { status: 400 });
