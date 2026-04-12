@@ -326,18 +326,18 @@ export async function sendBriefEmail({
         provider_message_id: data.id,
         sent_at: new Date().toISOString(),
       })
-      .eq("id", delivery.id)
-      .catch(() => {});
+      .eq("id", delivery.id);
   } catch (err) {
-    await supabase
-      .from("brief_email_deliveries")
-      .update({
-        status: "failed",
-        error: err.message,
-        failed_at: new Date().toISOString(),
-      })
-      .eq("id", delivery.id)
-      .catch(() => {});
+    try {
+      await supabase
+        .from("brief_email_deliveries")
+        .update({
+          status: "failed",
+          error: err.message,
+          failed_at: new Date().toISOString(),
+        })
+        .eq("id", delivery.id);
+    } catch (_) {}
     throw err;
   }
 }
