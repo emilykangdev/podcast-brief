@@ -40,6 +40,7 @@ const RETRY_PROMPTS = {
 };
 
 const posthog = getPostHog();
+log(`[posthog] initialized: ${posthog !== null}`);
 
 const app = express();
 app.use(express.json());
@@ -260,6 +261,11 @@ async function runPipeline(episodeUrl, profileId, briefId) {
         $ai_output_state: { briefId },
       },
     });
+    if (posthog) {
+      log(`[posthog] flushing ${traceId}`);
+      await posthog.flush();
+      log(`[posthog] flushed`);
+    }
 
     log(`[pipeline] complete [job=${jobId}]${errorLog.length > 0 ? " (degraded)" : ""}`);
   } catch (err) {
