@@ -20,5 +20,5 @@ Complete implementation plans live in `tmp/done-plans/`. When working on a new p
   - `.js` files (Next.js code): Use ESM syntax (`import`/`export`) but rely on Next.js to transpile them. They run on Vercel.
   - `.mjs` files (worker/script code): Real ESM, run with plain `node server.mjs` on Railway (Node 18). No transpiler.
   - **NEVER import a `.js` file from a `.mjs` file.** Node 18 treats `.js` as CommonJS (no `"type": "module"` in package.json), so ESM syntax in `.js` files causes a crash under plain Node. If worker code needs something from a `.js` file, either duplicate the value inline or create a shared `.mjs` module.
-  - **NEVER import a `.mjs` file from a `.js` file.** Next.js can handle it but it creates a confusing dependency direction.
+  - Importing `.mjs` from `.js` is fine — Next.js handles it. The dangerous direction is `.mjs` → `.js`.
   - Shared code used by both worlds must be in `.mjs` files (e.g., `libs/supabase/admin.mjs`, `libs/url.mjs`).
