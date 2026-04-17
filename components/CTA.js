@@ -21,7 +21,7 @@ const CTA = () => {
             your inbox for any episode.
           </p>
 
-          <button className="btn btn-primary btn-wide">Get {config.appName}</button>
+          <button className="btn btn-primary btn-wide">Try It Out</button>
         </div>
       </div>
     </section>
