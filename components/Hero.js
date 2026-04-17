@@ -31,7 +31,7 @@ const Hero = () => {
           Stay on top of your field, interests, and news. Every episode becomes a clear brief — key ideas explained, references unpacked, ready to save to your favorite notes app or act on right away.
         </p>
         <Link href={config.auth.loginUrl} className="btn btn-primary btn-wide">
-          Get {config.appName}
+          Try It Out
         </Link>
       </div>
     </section>
