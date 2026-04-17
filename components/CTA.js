@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import config from "@/config";
 
 const CTA = () => {
@@ -21,7 +22,9 @@ const CTA = () => {
             your inbox for any episode.
           </p>
 
-          <button className="btn btn-primary btn-wide">Try It Out</button>
+          <Link href={config.auth.loginUrl} className="btn btn-primary btn-wide">
+            Try It Out
+          </Link>
         </div>
       </div>
     </section>
