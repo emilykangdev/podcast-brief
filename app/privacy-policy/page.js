@@ -119,7 +119,7 @@ We may update this Privacy Policy from time to time. If significant changes are 
 
 If you have any questions about this Privacy Policy or how your data is handled, please contact:
 
-Email: podcastbrief@emilykang.dev
+Email: emily@podcastbrief.app
 Service Name: PodcastBrief`}
         </pre>
       </div>

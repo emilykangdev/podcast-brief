@@ -91,7 +91,7 @@ export default function BriefRequestForm({ onSuccess }) {
             <p>{inlineError}</p>
             {inlineErrorCode === "episode_too_long" && (
               <a
-                href={`mailto:podcastbrief@emilykang.dev?subject=${encodeURIComponent("Interest in longer episode support")}&body=${encodeURIComponent("Hi, I'm interested in getting briefs for episodes longer than 4 hours.\n\nFor example:\n- (Insert podcasts here, optional)")}`}
+                href={`mailto:emily@podcastbrief.app?subject=${encodeURIComponent("Interest in longer episode support")}&body=${encodeURIComponent("Hi, I'm interested in getting briefs for episodes longer than 4 hours.\n\nFor example:\n- (Insert podcasts here, optional)")}`}
                 className="btn btn-sm btn-outline"
               >
                 Let us know you want longer episodes

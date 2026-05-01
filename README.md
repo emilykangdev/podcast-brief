@@ -273,6 +273,7 @@ Two-layer defense using `@arcjet/next`:
 - `ARCJET_KEY` — Arcjet site key (server-only, for shield + rate limiting + bot detection). Get from https://app.arcjet.com
 - `APP_ENV` — `DEVELOPMENT`, `STAGING`, or `PRODUCTION`. Written to `briefs.environment` at submission time.
 - `NEXT_PUBLIC_DOMAIN_NAME` — Naked domain for the app (e.g. `podcast-brief.vercel.app`). Used for dashboard links in emails and SEO. Falls back to `localhost:3000` in dev.
+- `EMAIL_FROM` — Sender address for Resend-sent emails (e.g. `Emily <emily@podcastbrief.app>`). Must use a verified domain in Resend. Falls back to `Emily <emily@podcastbrief.app>` if unset.
 
 ### Railway (Worker)
 - `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY` — Supabase admin client
@@ -280,6 +281,7 @@ Two-layer defense using `@arcjet/next`:
 - `DEEPGRAM_API_KEY`, `OPENROUTER_API_KEY`, `EXA_API_KEY` — pipeline APIs
 - `BROWSERBASE_API_KEY`, `BROWSERBASE_PROJECT_ID` — headless browser
 - `RESEND_API_KEY` — Resend email API key (for brief completion emails)
+- `EMAIL_FROM` — Same value as Vercel. Sender address for the brief-completion email.
 - `NEXT_PUBLIC_DOMAIN_NAME` — Same value as Vercel. Used for dashboard links in emails.
 - `WEBHOOK_URL` — developer error alert endpoint (optional)
 

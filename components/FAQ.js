@@ -20,7 +20,7 @@ const faqList = [
     answer: (
       <p>
         There are no refunds at this time, because payment is for credits rather than a
-        monthly subscription. If a Brief isn&apos;t satisfying, please forward a copy of it to podcastbrief@emilykang.dev
+        monthly subscription. If a Brief isn&apos;t satisfying, please forward a copy of it to emily@podcastbrief.app
         and we can regenerate a free Brief of the episode for you.
       </p>
     ),

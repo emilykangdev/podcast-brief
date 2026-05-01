@@ -7,7 +7,7 @@ import supabase from "../supabase/admin.mjs";
 // but use ESM syntax. They work under Next.js (which transpiles) but not under
 // plain `node server.mjs`. Inline the values we need instead.
 const DOMAIN_NAME = process.env.NEXT_PUBLIC_DOMAIN_NAME || "localhost:3000";
-const FROM_ADMIN = `Emily at PodcastBrief <podcastbrief@emilykang.dev>`;
+const FROM_ADMIN = process.env.EMAIL_FROM || `Emily <emily@podcastbrief.app>`;
 
 let resendClient = null;
 function getResendClient() {

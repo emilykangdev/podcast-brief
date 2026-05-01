@@ -39,7 +39,7 @@ export default function BriefModal({ brief, isOpen, onClose, onRegenerate, userE
         <div className="mt-4 space-y-3">
           <p className="text-base-content/50">Brief generation failed.</p>
           <a
-            href={`mailto:podcastbrief@emilykang.dev?subject=${encodeURIComponent("Failed brief — requesting manual generation")}&body=${encodeURIComponent(`Hi, my brief for the following episode failed to generate:\n\n${brief.input_url}\n\nMy email is ${userEmail || "(not available)"}.\n\nCan you email me a successful brief for this episode?`)}`}
+            href={`mailto:emily@podcastbrief.app?subject=${encodeURIComponent("Failed brief — requesting manual generation")}&body=${encodeURIComponent(`Hi, my brief for the following episode failed to generate:\n\n${brief.input_url}\n\nMy email is ${userEmail || "(not available)"}.\n\nCan you email me a successful brief for this episode?`)}`}
             className="btn btn-sm btn-outline"
           >
             Report &amp; request brief
