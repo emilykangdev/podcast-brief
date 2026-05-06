@@ -1,5 +1,7 @@
 # Podcast Brief
 
+Deployed: https://www.podcastbrief.app/
+
 Generates structured briefs from podcast episodes. Users submit an Apple Podcasts URL, and the system transcribes, summarizes, enriches references, and delivers a formatted brief.
 
 ## Architecture
