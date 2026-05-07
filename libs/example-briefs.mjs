@@ -1,7 +1,9 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-const briefsDir = path.join(process.cwd(), "briefs");
+// Example briefs live in content/examples/ (checked into git).
+// The /briefs/ directory is gitignored — it's the worker's runtime output dir.
+const examplesDir = path.join(process.cwd(), "content", "examples");
 
 export const exampleBriefs = [
   {
@@ -22,7 +24,7 @@ export const exampleBriefs = [
       "Mattia walks through the Effect LSP integrated with TypeScript Go — setup, diagnostics, refactoring, and how compiler-level feedback steers both humans and LLMs toward better Effect patterns.",
     durationLabel: "≈ 50 min episode",
     readingLabel: "5 min read",
-    file: "ts-go-effect-lsp-final-brief.md",
+    file: "ts-go-effect-lsp.md",
   },
 ];
 
@@ -33,5 +35,5 @@ export function getExampleBrief(slug) {
 export async function loadExampleBriefMarkdown(slug) {
   const brief = getExampleBrief(slug);
   if (!brief) return null;
-  return readFile(path.join(briefsDir, brief.file), "utf8");
+  return readFile(path.join(examplesDir, brief.file), "utf8");
 }

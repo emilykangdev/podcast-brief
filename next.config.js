@@ -3,6 +3,10 @@ const nextConfig = {
     dirs: ["app", "components", "lib", "scripts"],
   },
   reactStrictMode: true,
+  // Bundle non-imported files needed at runtime (example brief markdown read by libs/example-briefs.mjs)
+  outputFileTracingIncludes: {
+    "/examples/[slug]": ["./content/examples/*.md"],
+  },
   images: {
     remotePatterns: [
       {
