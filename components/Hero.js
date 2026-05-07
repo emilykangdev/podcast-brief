@@ -30,9 +30,17 @@ const Hero = () => {
         <p className="text-base opacity-80 leading-relaxed max-w-2xl">
           Stay on top of your field, interests, and news. Every episode becomes a clear brief — key ideas explained, references unpacked, ready to save to your favorite notes app or act on right away.
         </p>
-        <Link href={config.auth.loginUrl} className="btn btn-primary btn-wide">
-          Try It Out
-        </Link>
+        <div className="flex flex-col items-center gap-3">
+          <Link href={config.auth.loginUrl} className="btn btn-primary btn-wide">
+            Try It Out
+          </Link>
+          <Link
+            href="/examples"
+            className="text-sm text-base-content/60 hover:text-base-content transition-colors"
+          >
+            or see an example brief →
+          </Link>
+        </div>
       </div>
     </section>
   );
