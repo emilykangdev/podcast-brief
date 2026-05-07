@@ -7,6 +7,16 @@ const examplesDir = path.join(process.cwd(), "content", "examples");
 
 export const exampleBriefs = [
   {
+    slug: "stacey-warshaw-ecommerce",
+    title: "Stacey Warshaw — Head of Ecommerce & Digital Marketing at LoveShackFancy",
+    subtitle: "Brand–performance balance, omnichannel reality, and AI adoption",
+    podcastName: "The Marketing Playbook",
+    summary:
+      "Stacey Warshaw on the path from PR to leading digital marketing and ecommerce at LoveShackFancy — why brand-led performance is the only kind that lasts, how to read collaborations as their own funnel, and where AI actually moves the needle.",
+    readingLabel: "6 min read",
+    file: "stacey-warshaw-ecommerce.md",
+  },
+  {
     slug: "kat-cole-ag1",
     title: "Kat Cole — AG1 CEO, Cinnabon President, Hooters Girl",
     subtitle: "Brand strategy, quality-driven growth, and a leader's playbook",
