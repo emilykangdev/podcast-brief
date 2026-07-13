@@ -451,6 +451,22 @@ The `error_log` column is a jsonb array. Each entry has a `step` field and conte
 - **Regeneration preserves old content.** The regeneration reset does NOT clear `output_markdown`. If the new pipeline fails, the user still has their original brief.
 - **`completeBrief()` only overwrites non-null fields.** On the error path, `output_markdown` is not passed, so whatever was written mid-pipeline (or the preserved original from regeneration) is kept.
 
+## Testing
+
+Three tiers, in order of what CI runs (`.github/workflows/ci.yml`):
+
+| Tier | Runner | What it covers |
+|------|--------|-----------------|
+| Unit (`npm test`) | Vitest, no external deps | `libs/estimate-signer.js` HMAC round-trip/tamper/reuse |
+| Integration (`npm run test:integration`) | Vitest against a real local Supabase Postgres | `consume_credits_and_queue_brief` / `consume_credits_and_regenerate_brief` RPC races and boundaries, Stripe webhook insert-first idempotency + rollback (real signature verification via `stripe.webhooks.generateTestHeaderString`, external Stripe API calls mocked), `server.mjs` job-claim race + stale-job recovery |
+| E2E (`npm run test:e2e`) | Playwright against a real `next dev` + local Supabase | Signup → magic link (read from local Mailpit) → onboarding → dashboard |
+
+Setup: `supabase start` (Supabase CLI + Docker), then run `./scripts/ci/write-test-env.sh .env.test.local` (for integration) and `./scripts/ci/write-test-env.sh .env.local` (for E2E — `next dev` always loads `.env.local`, never `.env.test.local`, since it forces `NODE_ENV=development` internally regardless of the parent shell's `NODE_ENV`). The script pulls the running instance's actual keys live via `supabase status`; `.env.test.example` documents the full variable list but leaves the Supabase key values as placeholders — GitHub's secret-scanning push protection flags the literal `sb_secret_...` value even though it's a fixed, publicly-known local-CLI default, not a real secret.
+
+**Deliberately not automated:** Stripe Checkout UI (Embedded Checkout iframe) via Playwright — Stripe's own docs (docs.stripe.com/automated-testing) state their frontend payment UIs have anti-automation protections and recommend testing the crediting logic via simulated signed webhook events instead, which the webhook idempotency tests above already do. Creating a real Checkout Session (`/api/stripe/create-checkout`) requires a live Stripe test-mode API call — this is not covered yet and needs a real `STRIPE_SECRET_KEY` (test mode) plus real test-mode price IDs wired up as CI secrets.
+
+`supabase/config.toml`'s `[auth]` `site_url`/`additional_redirect_urls` are pinned to `http://localhost:3000` (not `127.0.0.1`) — `next dev` canonicalizes requests to `localhost` internally, and a host mismatch breaks the PKCE `code_verifier` cookie exchange in `/api/auth/callback`.
+
 ## Plans
 
 Implementation plans live in `tmp/done-plans/`. Each documents design decisions, edge cases, and implementation details for a feature.
