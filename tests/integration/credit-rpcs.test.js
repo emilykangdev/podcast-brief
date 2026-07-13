@@ -8,6 +8,7 @@ import {
   getProfile,
   insertCompletedBrief,
 } from "./helpers/factories.js";
+import { holdRowLock, assertStillPending } from "./helpers/pg-lock.js";
 
 // Money-path coverage for the atomic credit RPCs (supabase/migrations/20260408000000_stripe_credits.sql),
 // run against a real local Postgres (via `supabase start`) — not mocked. These RPCs are the
@@ -76,10 +77,19 @@ describe("consume_credits_and_queue_brief", () => {
     createdProfiles.push(profileId);
     const episodeUrl = `https://podcasts.apple.com/episode/${randomUUID()}`;
 
-    const [a, b] = await Promise.all([
-      queueBrief(profileId, { episodeUrl, creditsToCharge: 2 }),
-      queueBrief(profileId, { episodeUrl, creditsToCharge: 2 }),
-    ]);
+    // Force the interleaving deterministically instead of hoping Promise.all happens to
+    // overlap: hold the same profiles row lock the RPC itself takes (SELECT ... FOR UPDATE),
+    // fire both calls, and confirm both are genuinely blocked on it. Since the RPC's dedup
+    // SELECT runs *before* that lock (unlocked), both calls reaching "blocked on the lock"
+    // proves both already ran their dedup check and found nothing — the exact race window
+    // the partial unique index exists to guard.
+    const lock = await holdRowLock("profiles", "id", profileId);
+    const promiseA = queueBrief(profileId, { episodeUrl, creditsToCharge: 2 });
+    const promiseB = queueBrief(profileId, { episodeUrl, creditsToCharge: 2 });
+    await assertStillPending(Promise.allSettled([promiseA, promiseB]));
+    await lock.release();
+
+    const [a, b] = await Promise.all([promiseA, promiseB]);
 
     // One of the two either got a graceful `already_exists` (lost the soft dedup check)
     // or hit the partial unique index as a raw 23505 (lost the hard race guard) — the
@@ -117,10 +127,15 @@ describe("consume_credits_and_queue_brief", () => {
     const profileId = await createTestProfile({ credits: 3 });
     createdProfiles.push(profileId);
 
-    const [a, b] = await Promise.all([
-      queueBrief(profileId, { creditsToCharge: 2 }),
-      queueBrief(profileId, { creditsToCharge: 2 }),
-    ]);
+    // Same deterministic-interleaving technique as the same-episode race above: hold the
+    // profiles lock, confirm both calls are genuinely queued on it, then release.
+    const lock = await holdRowLock("profiles", "id", profileId);
+    const promiseA = queueBrief(profileId, { creditsToCharge: 2 });
+    const promiseB = queueBrief(profileId, { creditsToCharge: 2 });
+    await assertStillPending(Promise.allSettled([promiseA, promiseB]));
+    await lock.release();
+
+    const [a, b] = await Promise.all([promiseA, promiseB]);
 
     const results = [a, b].map((r) => r.data);
     const winners = results.filter((d) => !d.error);
@@ -209,10 +224,16 @@ describe("consume_credits_and_regenerate_brief", () => {
       completedAt: new Date().toISOString(),
     });
 
-    const [a, b] = await Promise.all([
-      regenerate(profileId, briefId, 0),
-      regenerate(profileId, briefId, 0),
-    ]);
+    // consume_credits_and_regenerate_brief also takes FOR UPDATE on the profiles row before
+    // its atomic UPDATE ... WHERE regeneration_count = 0 — same deterministic-interleaving
+    // technique as the queue_brief races above.
+    const lock = await holdRowLock("profiles", "id", profileId);
+    const promiseA = regenerate(profileId, briefId, 0);
+    const promiseB = regenerate(profileId, briefId, 0);
+    await assertStillPending(Promise.allSettled([promiseA, promiseB]));
+    await lock.release();
+
+    const [a, b] = await Promise.all([promiseA, promiseB]);
 
     const results = [a.data, b.data];
     const winners = results.filter((d) => !d.error);

@@ -13,6 +13,7 @@ import {
   insertGeneratingBrief,
   getBrief,
 } from "./helpers/factories.js";
+import { holdRowLock, assertStillPending } from "./helpers/pg-lock.js";
 
 // Covers server.mjs's atomic job claim (the `UPDATE ... WHERE status='queued'` race guard)
 // and stale-job recovery, against a real local Postgres.
@@ -46,7 +47,18 @@ describe("claimNextJob", () => {
     createdProfiles.push(profileId);
     const briefId = await insertQueuedBrief({ profileId });
 
-    const [a, b] = await Promise.all([claimNextJob(), claimNextJob()]);
+    // Force the interleaving deterministically: claimNextJob's own atomic claim is
+    // `UPDATE briefs SET status='generating' ... WHERE id=$1 AND status='queued'`, which
+    // takes a row lock on the brief. Its preceding SELECT-for-oldest-queued is unlocked, so
+    // holding the same row lock here doesn't block that first read — both calls reach the
+    // UPDATE and queue on this lock, proving the race rather than hoping Promise.all overlaps.
+    const lock = await holdRowLock("briefs", "id", briefId);
+    const promiseA = claimNextJob();
+    const promiseB = claimNextJob();
+    await assertStillPending(Promise.allSettled([promiseA, promiseB]));
+    await lock.release();
+
+    const [a, b] = await Promise.all([promiseA, promiseB]);
     const claims = [a, b].filter(Boolean);
 
     expect(claims).toHaveLength(1);

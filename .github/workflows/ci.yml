@@ -9,8 +9,12 @@ on:
 # resolves to in production today (verified against a live build log, not assumed) — several
 # deps (@arcjet/*, marked, posthog-node) declare `engines >=20` and only warn under npm on 18,
 # they don't hard-fail. See PR description for the follow-up this surfaces.
+#
+# SUPABASE_CLI_VERSION pinned (not "latest") for CI reproducibility — this is the exact
+# version the whole integration/e2e suite was verified against locally.
 env:
   NODE_VERSION: 18.20.5
+  SUPABASE_CLI_VERSION: 2.102.0
 
 jobs:
   lint-and-unit:
@@ -36,7 +40,7 @@ jobs:
       - run: npm ci
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: ${{ env.SUPABASE_CLI_VERSION }}
       - run: supabase start
       - run: ./scripts/ci/write-test-env.sh .env.test.local
       - run: npm run test:integration
@@ -53,7 +57,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: ${{ env.SUPABASE_CLI_VERSION }}
       - run: supabase start
       # next dev always forces NODE_ENV=development internally, so it only ever reads
       # .env.local — see playwright.config.mjs.

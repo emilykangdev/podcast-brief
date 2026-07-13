@@ -13,7 +13,8 @@ supabase status -o env \
   --override-name api.url=NEXT_PUBLIC_SUPABASE_URL \
   --override-name auth.publishable_key=NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
   --override-name auth.secret_key=SUPABASE_SECRET_KEY \
-  | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY|SUPABASE_SECRET_KEY)=' \
+  --override-name db.url=SUPABASE_DB_URL \
+  | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY|SUPABASE_SECRET_KEY|SUPABASE_DB_URL)=' \
   > "$OUT"
 
 cat >> "$OUT" <<'EOF'

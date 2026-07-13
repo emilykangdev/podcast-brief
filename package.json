@@ -13,7 +13,7 @@
     "lint": "next lint",
     "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest --config vitest.config.mjs",
-    "test:integration": "node --env-file=.env.test.local node_modules/.bin/vitest run --config vitest.integration.config.mjs",
+    "test:integration": "dotenv -e .env.test.local -- vitest run --config vitest.integration.config.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -62,6 +62,8 @@
     "@tailwindcss/postcss": "^4.0.0",
     "autoprefixer": "^10.4.20",
     "daisyui": "^5.0.50",
+    "dotenv-cli": "^11.0.0",
+    "pg": "^8.22.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.0.0",
     "vitest": "^2.1.9"
