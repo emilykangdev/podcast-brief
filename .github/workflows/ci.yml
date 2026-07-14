@@ -5,15 +5,18 @@ on:
     branches: [main]
   pull_request:
 
-# .nvmrc / package.json engines pin 18.20.5 to match what Railway's Nixpacks build actually
-# resolves to in production today (verified against a live build log, not assumed) — several
-# deps (@arcjet/*, marked, posthog-node) declare `engines >=20` and only warn under npm on 18,
-# they don't hard-fail. See PR description for the follow-up this surfaces.
+# .nvmrc / package.json engines pin Node 20 (LTS "Iron") because Vercel discontinued Node 18
+# as a build runtime entirely (builds fail hard with "invalid or discontinued Node.js Version"),
+# and Vercel only supports 20.x/22.x/24.x today. Node 20 also silences the `engines >=20`
+# warnings that @arcjet/*, marked, and posthog-node already emitted under npm on 18 — those were
+# only warnings on 18, not hard failures, but the Vercel discontinuation forced the move anyway.
+# Railway's Nixpacks build reads the same package.json engines field, so it picks up Node 20
+# automatically; nothing on Railway's side hard-requires 18.
 #
 # SUPABASE_CLI_VERSION pinned (not "latest") for CI reproducibility — this is the exact
 # version the whole integration/e2e suite was verified against locally.
 env:
-  NODE_VERSION: 18.20.5
+  NODE_VERSION: 20.20.2
   SUPABASE_CLI_VERSION: 2.102.0
 
 jobs:
