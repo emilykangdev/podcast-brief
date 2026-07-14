@@ -2,6 +2,7 @@ import express from "express";
 import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
+import { pathToFileURL } from "url";
 import { writeFileSync } from "fs";
 import { mkdir, rm } from "fs/promises";
 import supabase from "./libs/supabase/admin.mjs";
@@ -394,7 +395,7 @@ const PORT = process.env.PORT || 3001;
 // Guards the boot sequence (HTTP listen + polling loops) so importing this module — e.g. from
 // a test — never starts a live server or background polling. Only runs when server.mjs is
 // executed directly (`node server.mjs`), matching Railway's startCommand.
-const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+const isMainModule = import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMainModule) {
   app.listen(PORT, async () => {
     log(`Worker listening on port ${PORT} (env: ${APP_ENV})`);

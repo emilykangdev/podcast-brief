@@ -86,8 +86,11 @@ describe("consume_credits_and_queue_brief", () => {
     const lock = await holdRowLock("profiles", "id", profileId);
     const promiseA = queueBrief(profileId, { episodeUrl, creditsToCharge: 2 });
     const promiseB = queueBrief(profileId, { episodeUrl, creditsToCharge: 2 });
-    await assertStillPending(Promise.allSettled([promiseA, promiseB]));
-    await lock.release();
+    try {
+      await assertStillPending(Promise.allSettled([promiseA, promiseB]));
+    } finally {
+      await lock.release();
+    }
 
     const [a, b] = await Promise.all([promiseA, promiseB]);
 
@@ -132,8 +135,11 @@ describe("consume_credits_and_queue_brief", () => {
     const lock = await holdRowLock("profiles", "id", profileId);
     const promiseA = queueBrief(profileId, { creditsToCharge: 2 });
     const promiseB = queueBrief(profileId, { creditsToCharge: 2 });
-    await assertStillPending(Promise.allSettled([promiseA, promiseB]));
-    await lock.release();
+    try {
+      await assertStillPending(Promise.allSettled([promiseA, promiseB]));
+    } finally {
+      await lock.release();
+    }
 
     const [a, b] = await Promise.all([promiseA, promiseB]);
 
@@ -230,8 +236,11 @@ describe("consume_credits_and_regenerate_brief", () => {
     const lock = await holdRowLock("profiles", "id", profileId);
     const promiseA = regenerate(profileId, briefId, 0);
     const promiseB = regenerate(profileId, briefId, 0);
-    await assertStillPending(Promise.allSettled([promiseA, promiseB]));
-    await lock.release();
+    try {
+      await assertStillPending(Promise.allSettled([promiseA, promiseB]));
+    } finally {
+      await lock.release();
+    }
 
     const [a, b] = await Promise.all([promiseA, promiseB]);
 
