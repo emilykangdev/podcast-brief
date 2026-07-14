@@ -2,6 +2,7 @@ import express from "express";
 import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
+import { pathToFileURL } from "url";
 import { writeFileSync } from "fs";
 import { mkdir, rm } from "fs/promises";
 import supabase from "./libs/supabase/admin.mjs";
@@ -329,35 +330,42 @@ async function recoverStaleJobs() {
 let isProcessing = false;
 let currentJobId = null;
 
+// Finds the oldest queued job and atomically claims it via UPDATE ... WHERE status='queued'.
+// Under a two-worker race, only one UPDATE affects a row (Postgres row-level locking) — the
+// loser's .select() returns empty and it moves on. Extracted from pollForWork so it can be
+// exercised directly in tests without pollForWork's recursive setTimeout scheduling.
+async function claimNextJob() {
+  const { data: jobs } = await supabase
+    .from("briefs")
+    .select("id, input_url, profile_id")
+    .eq("status", "queued")
+    .eq("environment", APP_ENV)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (!jobs?.length) return null;
+  const job = jobs[0];
+
+  const { data: claimed } = await supabase
+    .from("briefs")
+    .update({ status: "generating", started_at: new Date().toISOString() })
+    .eq("id", job.id)
+    .eq("status", "queued")
+    .select("id, input_url, profile_id");
+
+  return claimed?.length ? claimed[0] : null; // empty = another worker claimed it first
+}
+
 async function pollForWork() {
   if (isProcessing) return;
   isProcessing = true;
 
   try {
-    // Find oldest queued job for this environment
-    const { data: jobs } = await supabase
-      .from("briefs")
-      .select("id, input_url, profile_id")
-      .eq("status", "queued")
-      .eq("environment", APP_ENV)
-      .order("created_at", { ascending: true })
-      .limit(1);
+    const claimedJob = await claimNextJob();
+    if (!claimedJob) return;
 
-    if (!jobs?.length) return;
-    const job = jobs[0];
-
-    // Atomic claim
-    const { data: claimed } = await supabase
-      .from("briefs")
-      .update({ status: "generating", started_at: new Date().toISOString() })
-      .eq("id", job.id)
-      .eq("status", "queued")
-      .select("id, input_url, profile_id");
-
-    if (!claimed?.length) return; // another worker claimed it
-
-    currentJobId = claimed[0].id;
-    await runPipeline(claimed[0].input_url, claimed[0].profile_id, claimed[0].id);
+    currentJobId = claimedJob.id;
+    await runPipeline(claimedJob.input_url, claimedJob.profile_id, claimedJob.id);
   } catch (err) {
     logError(`[pipeline error] ${err.message}`);
   } finally {
@@ -369,6 +377,13 @@ async function pollForWork() {
   setTimeout(pollForWork, 0);
 }
 
+// Test-only: pollForWork() is the only normal way currentJobId gets set, but calling
+// pollForWork() directly in a test starts its recursive setTimeout(pollForWork, 0) chain
+// forever. This lets tests exercise recoverStaleJobs' own-in-flight-job exclusion without that.
+function __setCurrentJobIdForTesting(id) {
+  currentJobId = id;
+}
+
 // Run stale job recovery every 5 minutes — not just on boot.
 // Railway blue-green deploys can kill the old container mid-pipeline, leaving
 // briefs stuck at "generating". The startup recovery misses them if they're
@@ -376,15 +391,32 @@ async function pollForWork() {
 const RECOVERY_INTERVAL_MS = 5 * 60 * 1000;
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, async () => {
-  log(`Worker listening on port ${PORT} (env: ${APP_ENV})`);
-  await recoverStaleJobs();
-  setInterval(recoverStaleJobs, RECOVERY_INTERVAL_MS);
-  setInterval(pollForWork, POLL_INTERVAL_MS);
-  pollForWork(); // check immediately on boot
-});
 
-process.on("SIGTERM", async () => {
-  await posthog?.shutdown();
-  process.exit(0);
-});
+// Guards the boot sequence (HTTP listen + polling loops) so importing this module — e.g. from
+// a test — never starts a live server or background polling. Only runs when server.mjs is
+// executed directly (`node server.mjs`), matching Railway's startCommand.
+const isMainModule = import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMainModule) {
+  app.listen(PORT, async () => {
+    log(`Worker listening on port ${PORT} (env: ${APP_ENV})`);
+    await recoverStaleJobs();
+    setInterval(recoverStaleJobs, RECOVERY_INTERVAL_MS);
+    setInterval(pollForWork, POLL_INTERVAL_MS);
+    pollForWork(); // check immediately on boot
+  });
+
+  process.on("SIGTERM", async () => {
+    await posthog?.shutdown();
+    process.exit(0);
+  });
+}
+
+export {
+  app,
+  claimNextJob,
+  recoverStaleJobs,
+  pollForWork,
+  runPipeline,
+  STALE_JOB_TIMEOUT_MS,
+  __setCurrentJobIdForTesting,
+};

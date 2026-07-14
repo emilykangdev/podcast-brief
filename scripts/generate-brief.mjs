@@ -137,8 +137,8 @@ export async function run({
   if (!outputDir) outputDir = process.cwd();
 
   // ── node version check
-  if (parseInt(process.versions.node) < 18) {
-    throw new Error("Node 18+ required");
+  if (parseInt(process.versions.node) < 20) {
+    throw new Error("Node 20+ required");
   }
 
   // ── env checks

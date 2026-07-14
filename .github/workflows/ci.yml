@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# .nvmrc / package.json engines pin Node 20 (LTS "Iron") because Vercel discontinued Node 18
+# as a build runtime entirely (builds fail hard with "invalid or discontinued Node.js Version"),
+# and Vercel only supports 20.x/22.x/24.x today. Node 20 also silences the `engines >=20`
+# warnings that @arcjet/*, marked, and posthog-node already emitted under npm on 18 — those were
+# only warnings on 18, not hard failures, but the Vercel discontinuation forced the move anyway.
+# Railway's Nixpacks build reads the same package.json engines field, so it picks up Node 20
+# automatically; nothing on Railway's side hard-requires 18.
+#
+# SUPABASE_CLI_VERSION pinned (not "latest") for CI reproducibility — this is the exact
+# version the whole integration/e2e suite was verified against locally.
+env:
+  NODE_VERSION: 20.20.2
+  SUPABASE_CLI_VERSION: 2.102.0
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - run: supabase start
+      - run: ./scripts/ci/write-test-env.sh .env.test.local
+      - run: npm run test:integration
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - run: supabase start
+      # next dev always forces NODE_ENV=development internally, so it only ever reads
+      # .env.local — see playwright.config.mjs.
+      - run: ./scripts/ci/write-test-env.sh .env.local
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

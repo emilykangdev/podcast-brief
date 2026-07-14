@@ -3,9 +3,9 @@ import juice from "juice";
 import { Resend } from "resend";
 import supabase from "../supabase/admin.mjs";
 
-// Can't import config.js or resend.js — they're .js files (CommonJS under Node 18)
-// but use ESM syntax. They work under Next.js (which transpiles) but not under
-// plain `node server.mjs`. Inline the values we need instead.
+// Can't import config.js or resend.js — they're .js files (CommonJS under plain Node,
+// regardless of major version) but use ESM syntax. They work under Next.js (which
+// transpiles) but not under plain `node server.mjs`. Inline the values we need instead.
 const DOMAIN_NAME = process.env.NEXT_PUBLIC_DOMAIN_NAME || "localhost:3000";
 const FROM_ADMIN = process.env.EMAIL_FROM || `Emily <emily@podcastbrief.app>`;
 
