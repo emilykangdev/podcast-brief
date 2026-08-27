@@ -11,7 +11,7 @@ test("new user signs up, follows the magic link, and lands on onboarding", async
 
   await page.goto("/signin");
   await page.getByPlaceholder("tom@cruise.com").fill(email);
-  await page.getByRole("button", { name: /send magic link/i }).click();
+  await page.getByRole("button", { name: /continue with email/i }).click();
   await expect(page.getByText(/check your emails/i)).toBeVisible();
 
   const magicLink = await waitForMagicLink(email);
