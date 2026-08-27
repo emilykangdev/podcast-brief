@@ -22,18 +22,32 @@ export default function Login() {
     try {
       const redirectURL = window.location.origin + "/api/auth/callback";
 
-      await supabase.auth.signInWithOtp({
+      const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
           emailRedirectTo: redirectURL,
         },
       });
 
+      // supabase-js returns errors (including network failures, as AuthRetryableFetchError)
+      // instead of throwing — the catch below never sees them. Toasting success without
+      // checking `error` hid a production SMTP outage behind "Check your emails!".
+      if (error) {
+        console.error(error);
+        if (error.code === "over_email_send_rate_limit") {
+          toast.error("Too many attempts — wait a minute, then try again.");
+        } else {
+          toast.error("Couldn't send the sign-in link. Please try again.");
+        }
+        return;
+      }
+
       toast.success("Check your emails!");
 
       setIsDisabled(true);
     } catch (error) {
-      console.log(error);
+      console.error(error);
+      toast.error("Couldn't send the sign-in link. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -59,7 +73,7 @@ export default function Login() {
         </Link>
       </div>
       <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-center mb-12">
-        Sign-in to {config.appName}{" "}
+        Sign in or create your account
       </h1>
 
       <div className="space-y-8 max-w-xl mx-auto">
@@ -80,9 +94,14 @@ export default function Login() {
             type="submit"
           >
             {isLoading && <span className="loading loading-spinner loading-xs"></span>}
-            Send Magic Link
+            Continue with email
           </button>
         </form>
+
+        <p className="text-sm opacity-70 text-center">
+          We&apos;ll email you a link — no password needed. New accounts start with 3 free
+          credits.
+        </p>
       </div>
     </main>
   );
